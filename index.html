@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zebra Curve Transform</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #1a1a1a;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #888;
+      font-family: monospace;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading…</div>
+  <canvas id="the_canvas_id"></canvas>
+  <script type="module">
+    import init from "./pkg/zebra_curve_transform.js";
+    async function run() {
+      await init();
+      document.getElementById("loading").remove();
+    }
+    run().catch(console.error);
+  </script>
+</body>
+</html>

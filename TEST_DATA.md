@@ -81,22 +81,95 @@ Decoded:
 | 3     | 0.75 | 0.00 | negative trough|
 | 4     | 1.00 | 0.50 | zero crossing  |
 
-### Pure sine at the fundamental — spectral interpretation
+### Pure sine at the fundamental — spectral interpretation (Zebra3 reference)
 
-Load, select **Spectrum**, press Play. Only harmonic 1 carries energy → pure cosine output.
-
-The spike at x = 1/1024 ≈ 0.001 is analytically exact:
-`1/1024 = 2^(-10) = 0x3A800000`, `2/1024 = 2^(-9) = 0x3B000000`.
-The curve evaluates to exactly 1.0 at x = 1/1024 and 0 everywhere else.
+This is what Zebra3 itself exports for a pure-fundamental spectral curve.
+Load in Zebra3's spectral oscillator → plays as a sine at the base frequency.
 
 ```
 // u-he Bezier Curve
 // Version 1.0
 Curve ID = 1 MorphType = 'Peaks And Valleys'
-PX XY = '0/0' OV = '3EAAAAAB/3EAAAAAB'
-PX XY = '3A800000/3F800000' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
-PX XY = '3B000000/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
-PX XY = '3F800000/0' IV = '3F2AAAAB/3F2AAAAB'
+PX XY = '0/3F800000' OV = '3EAA5105/3EAA3D46'
+PX XY = '3C23D70A/3BA3D700' IV = '3F2A7E40/3F2A7460' OV = '3EA73F2B/3EA14312'
+PX XY = '3F800000/0' IV = '3F378657/3F346FE5'
 ```
 
-Note: the spike is invisible in the visualiser (it occupies 0.1% of the X axis).
+Decoded:
+
+| Point | X       | Y     | IV_X  | IV_Y  | OV_X  | OV_Y  |
+|-------|---------|-------|-------|-------|-------|-------|
+| 0     | 0.000   | 1.000 | —     | —     | 0.333 | 0.332 |
+| 1     | 0.010   | 0.005 | 0.666 | 0.666 | 0.327 | 0.315 |
+| 2     | 1.000   | 0.000 | 0.717 | 0.705 | —     | —     |
+
+Shape: drops from Y=1 at x=0 to Y=0.005 at x=0.01, then smoothly decays to Y=0 at x=1.
+The initial drop occupies the first 1% of the X axis.
+
+**Confirmed: Zebra3 uses x = log₂(k) / 10, left-edge sampling.**
+
+x = log₂(k) / 10    where k = harmonic number (1 = fundamental)
+
+The scale constant 10 = log₂(1024), covering harmonics 1..1024.
+Sampling rule: harmonic k's amplitude = curve Y value at x = log₂(k) / 10.
+Any curve shape within the cell beyond the leftmost point does not affect that harmonic.
+
+Evidence — control point positions in the curves below match harmonic positions exactly:
+- P1.x = 0x3DCCCCCD = 0.10000 = log₂(2)/10  (harmonic 2)  ← float32-exact
+- P2.x = 0x3E224CD7 = 0.15850 = log₂(3)/10  (harmonic 3)  ← float32-exact
+
+### Second Zebra3 reference pure-sine — less steep slope (P1.x ≈ 0.0863)
+
+Same spectral intent (pure sine at the fundamental). P1.x < log₂(2)/10 = 0.1, so harmonic 2
+is sampled in the flat-zero second segment → pure sine.
+
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/3F800000' OV = '3EAA5105/3EAA3D46'
+PX XY = '3DB0A3D7/0' IV = '3F2A7E40/3F2A7460' OV = '3EA73F2B/3EA14312'
+PX XY = '3F800000/0' IV = '3F378657/3F346FE5'
+```
+
+Decoded: P0=(0, 1.0), P1=(0.08625, 0), P2=(1.0, 0). Harmonic 2 at x=0.1 > P1.x → y=0. Pure sine ✓
+
+### Boundary pure-sine — P1.x at harmonic-2 position (maximum width for pure sine)
+
+P1.x = 0x3DCCCCCD = log₂(2)/10 = 0.1 exactly. Harmonic 2 sampled at its own left edge (P1.y=0).
+Moving P1 to the right causes P1.y=0 to slip past x=0.1, and harmonic 2 acquires amplitude.
+
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/3F800000' OV = '3EAA5105/3EAA3D46'
+PX XY = '3DCCCCCD/0' IV = '3F2A7E40/3F2A7460' OV = '3EA73F2B/3EA14312'
+PX XY = '3F800000/0' IV = '3F378657/3F346FE5'
+```
+
+### Harmonics 1 and 2 at full amplitude
+
+Control points placed exactly at harmonic 2 (P1.x=0.1, P1.y=1.0) and harmonic 3 (P2.x=0.1585,
+P2.y=0). Left-edge sampling reads Y=1 at x=0 (h1) and x=0.1 (h2), Y=0 at x=0.1585 (h3+).
+
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/3F800000' OV = '3EA4D9A6/3E848243'
+PX XY = '3DCCCCCD/3F800000' IV = '3F375916/3F278D33' OV = '3EB43703/3EAE6644'
+PX XY = '3E224CD7/0' IV = '3F2FC0F9/3F2CC9AF' OV = '3EA73F2B/3EA14312'
+PX XY = '3F800000/0' IV = '3F378657/3F346FE5'
+```
+
+Decoded:
+
+| Point | X      | Y     | Meaning                        |
+|-------|--------|-------|--------------------------------|
+| 0     | 0.0000 | 1.000 | harmonic 1 sample (x=0) = 1.0 |
+| 1     | 0.1000 | 1.000 | harmonic 2 sample (x=0.1) = 1.0 |
+| 2     | 0.1585 | 0.000 | harmonic 3 sample (x=0.1585) = 0 |
+| 3     | 1.0000 | 0.000 | all higher harmonics = 0 |
+
+P1.x = log₂(2)/10, P2.x = log₂(3)/10 — both float32-exact to within 5 ULP.

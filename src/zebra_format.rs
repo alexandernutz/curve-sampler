@@ -114,6 +114,41 @@ mod tests {
         PX XY = '3F4CCCCD/3DFA2330' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB' \n\
         PX XY = '3F800000/3F006807' IV = '3F2AAAAB/3F2AAAAB' \n";
 
+    // Pure sine wave approximation — Zebra3's 5-point representation.
+    // Uses 1/π and 2/π handle fractions (optimal for sine quarter-period).
+    // Notable: points 2 and 3 share XY = (0.25, 1.0) — a "double point" that
+    // decouples the handles on each side of the peak without a C1 constraint.
+    // The zero-length segment P2→P3 is silently skipped by eval().
+    const SINE: &str = "// u-he Bezier Curve\n\
+        // Version 1.0\n\
+        Curve ID = 1 MorphType = 'Peaks And Valleys'\n\
+        PX XY = '0/3F000000' OV = '3EA2F980/3F000000' \n\
+        PX XY = '3E800000/3F800000' IV = '3F22F980/3F800000' OV = '3EBA0CFA/0' \n\
+        PX XY = '3E800000/3F800000' IV = '3F22F983/3F800000' OV = '3EBA0CFA/0' \n\
+        PX XY = '3F400000/0' IV = '3F22F983/3F800000' OV = '3EBA0CF8/0' \n\
+        PX XY = '3F800000/3F000000' IV = '3F2E8340/3F000000' \n";
+
+    #[test]
+    fn sine_parses() {
+        let curve = parse(SINE).unwrap();
+        assert_eq!(curve.points.len(), 5);
+        // Double point: pts[1] and pts[2] share the same position
+        let p1 = &curve.points[1];
+        let p2 = &curve.points[2];
+        assert!((p1.position.0 - p2.position.0).abs() < 1e-6);
+        assert!((p1.position.1 - p2.position.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sine_eval_shape() {
+        let curve = parse(SINE).unwrap();
+        // At the quarter points the sine should be: 0→0.5, 0.25→1.0, 0.5→0.5, 0.75→0.0, 1.0→0.5
+        assert!((curve.eval(0.0)  - 0.5).abs() < 1e-4, "x=0:   {}", curve.eval(0.0));
+        assert!((curve.eval(0.25) - 1.0).abs() < 1e-4, "x=0.25:{}", curve.eval(0.25));
+        assert!((curve.eval(0.75) - 0.0).abs() < 1e-4, "x=0.75:{}", curve.eval(0.75));
+        assert!((curve.eval(1.0)  - 0.5).abs() < 1e-4, "x=1.0: {}", curve.eval(1.0));
+    }
+
     #[test]
     fn parse_point_count() {
         let curve = parse(SAMPLE).unwrap();

@@ -84,7 +84,8 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
 /// 2. Build a real-valued spectrum with zero phase
 /// 3. IFFT
 /// 4. Normalize to [0, 1]
-/// 5. Fit new Bézier curve
+/// 5. Phase-normalize: cyclic shift to first upward zero crossing
+/// 6. Fit new Bézier curve
 pub fn spectrum_to_geometry(curve: &BezierCurve, fft_size: usize) -> Result<BezierCurve, String> {
     let num_harmonics = fft_size / 2;
     let harmonic_amps = sample_log_freq(curve, num_harmonics);
@@ -103,7 +104,8 @@ pub fn spectrum_to_geometry(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
     let min = real.iter().cloned().fold(f32::INFINITY, f32::min);
     let max = real.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let range = (max - min).max(1e-6);
-    let normalized: Vec<f32> = real.iter().map(|&x| (x - min) / range).collect();
+    let mut normalized: Vec<f32> = real.iter().map(|&x| (x - min) / range).collect();
+    phase_normalize(&mut normalized);
 
     Ok(fit_bezier(&normalized, FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
 }
@@ -130,5 +132,21 @@ pub fn spectrum_to_waveform_samples(curve: &BezierCurve, fft_size: usize) -> Vec
     let min = real.iter().cloned().fold(f32::INFINITY, f32::min);
     let max = real.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let range = (max - min).max(1e-6);
-    real.iter().map(|&x| (x - min) / range).collect()
+    let mut normalized: Vec<f32> = real.iter().map(|&x| (x - min) / range).collect();
+    phase_normalize(&mut normalized);
+    normalized
+}
+
+/// Cyclically rotate `samples` so the cycle starts at the first upward zero crossing
+/// (where y crosses 0.5 going upward). This converts cosine-phase IFFT output into
+/// the conventional sine-like shape without affecting the audio (looping waveform).
+/// Falls back to no shift if no crossing is found (e.g. flat or DC-only signal).
+fn phase_normalize(samples: &mut Vec<f32>) {
+    let n = samples.len();
+    let shift = (0..n).find(|&i| {
+        samples[i] < 0.5 && samples[(i + 1) % n] >= 0.5
+    });
+    if let Some(offset) = shift {
+        samples.rotate_left(offset + 1);
+    }
 }

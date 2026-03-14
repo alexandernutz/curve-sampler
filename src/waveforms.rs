@@ -4,7 +4,7 @@
 //! Simple geometric shapes are direct-construct BezierCurves (minimal points, exact shape).
 //! Smooth or irregular shapes go through fit_bezier on a sample array.
 
-use crate::bezier::{fit_bezier, BezierCurve, ControlPoint};
+use crate::bezier::{fit_bezier, fit_bezier_interp, BezierCurve, ControlPoint};
 use crate::zebra_format;
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ fn spec_dark_samples() -> Vec<f32> {
 // ── preset tables ──────────────────────────────────────────────────────────────
 
 fn geo_direct(c: BezierCurve) -> String   { to_text(&c) }
-fn geo_fit(s: Vec<f32>) -> String          { to_text(&fit_bezier(&s, GEO_SEGMENTS,  1, "Peaks And Valleys")) }
+fn geo_fit(s: Vec<f32>) -> String          { to_text(&fit_bezier_interp(&s, GEO_SEGMENTS,  1, "Peaks And Valleys")) }
 fn spec_direct(c: BezierCurve) -> String  { to_text(&c) }
 fn spec_fit(s: Vec<f32>) -> String         { to_text(&fit_bezier(&s, SPEC_SEGMENTS, 1, "Peaks And Valleys")) }
 

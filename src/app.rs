@@ -100,10 +100,13 @@ impl eframe::App for App {
             // ── Curve Transforms ──────────────────────────────────────────────
             ui.heading("Curve Transforms");
             ui.horizontal(|ui| {
-                if ui.button("Geometry -> Spectrum").clicked() {
-                    self.run_transform(Direction::Forward);
+                if ui.button("G->S Smooth").clicked() {
+                    self.run_transform(Direction::ForwardSmooth);
                 }
-                if ui.button("Spectrum -> Geometry").clicked() {
+                if ui.button("G->S Steps").clicked() {
+                    self.run_transform(Direction::ForwardSteps);
+                }
+                if ui.button("S->G").clicked() {
                     self.run_transform(Direction::Inverse);
                 }
             });
@@ -207,7 +210,8 @@ impl eframe::App for App {
 }
 
 enum Direction {
-    Forward,
+    ForwardSmooth,
+    ForwardSteps,
     Inverse,
 }
 
@@ -265,7 +269,7 @@ impl App {
 
     fn harmonize(&mut self) {
         // G→S→G in one click: symmetrises the waveform (phase is discarded, then reconstructed).
-        self.run_transform(Direction::Forward);
+        self.run_transform(Direction::ForwardSmooth);
         self.run_transform(Direction::Inverse);
     }
 
@@ -278,8 +282,11 @@ impl App {
             return;
         };
         let result = match dir {
-            Direction::Forward => {
+            Direction::ForwardSmooth => {
                 crate::transform::geometry_to_spectrum(curve, self.fft_size)
+            }
+            Direction::ForwardSteps => {
+                crate::transform::geometry_to_spectrum_steps(curve, self.fft_size)
             }
             Direction::Inverse => {
                 crate::transform::spectrum_to_geometry(curve, self.fft_size)

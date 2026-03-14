@@ -87,18 +87,13 @@ fn lerp_pt(a: (f32, f32), b: (f32, f32), t: f32) -> (f32, f32) {
     (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
 }
 
-/// Fit a piecewise cubic Bézier to `samples` (evenly spaced over [0, 1]).
-/// Produces `num_segments` segments (num_segments + 1 control points).
+/// Fit a piecewise cubic Bézier to `samples` by interpolating through knot positions.
 ///
-/// Uses Catmull-Rom tangents: each knot's slope is estimated from its neighbours
-/// (central difference for interior points, one-sided for endpoints). Handles are
-/// placed 1/3 of the segment span away in X, with Y derived from the slope.
-///
-/// Handle storage uses Zebra3's fractional format: (tx, ty) where
-///   handle = P_start + (tx, ty) * (P_end - P_start)
-/// For nearly-flat segments (|Δy| < ε) the fractional Y is ill-defined, so
-/// we fall back to ty = 1/3 or 2/3, effectively keeping those handles flat.
-pub fn fit_bezier(
+/// Knot Y values are read directly from `samples` at evenly-spaced x positions,
+/// then Catmull-Rom tangents are applied. This preserves the full variation of the
+/// input (including random/chaotic data) at the cost of not minimizing fit error
+/// between knots. Use for geometry (time-domain) curves where detail matters.
+pub fn fit_bezier_interp(
     samples: &[f32],
     num_segments: usize,
     curve_id: u32,
@@ -106,20 +101,22 @@ pub fn fit_bezier(
 ) -> BezierCurve {
     let n = num_segments.max(1);
     let num_pts = n + 1;
-
-    // Linear interpolation into samples array.
-    let lookup = |x: f32| -> f32 {
-        let t = (x * (samples.len() - 1) as f32).clamp(0.0, (samples.len() - 1) as f32);
-        let lo = t.floor() as usize;
-        let hi = (lo + 1).min(samples.len() - 1);
-        let frac = t - t.floor();
-        samples[lo] * (1.0 - frac) + samples[hi] * frac
-    };
+    let ns = samples.len();
 
     let xs: Vec<f32> = (0..num_pts).map(|i| i as f32 / n as f32).collect();
-    let ys: Vec<f32> = xs.iter().map(|&x| lookup(x)).collect();
 
-    // Catmull-Rom slopes (dy/dx) at each knot.
+    // Sample at each knot x via linear interpolation into samples
+    let ys: Vec<f32> = xs
+        .iter()
+        .map(|&x| {
+            let fi = x * (ns - 1) as f32;
+            let lo = (fi as usize).min(ns - 2);
+            let t = fi - lo as f32;
+            samples[lo] * (1.0 - t) + samples[lo + 1] * t
+        })
+        .collect();
+
+    // Catmull-Rom slopes at each knot
     let slopes: Vec<f32> = (0..num_pts)
         .map(|i| {
             if i == 0 {
@@ -134,7 +131,6 @@ pub fn fit_bezier(
 
     let mut points = Vec::with_capacity(num_pts);
     for i in 0..num_pts {
-        // Outgoing handle for segment i → i+1.
         let outgoing = if i < n {
             let dx = xs[i + 1] - xs[i];
             let dy_seg = ys[i + 1] - ys[i];
@@ -149,7 +145,6 @@ pub fn fit_bezier(
             None
         };
 
-        // Incoming handle for segment i-1 → i.
         let incoming = if i > 0 {
             let dx = xs[i] - xs[i - 1];
             let dy_seg = ys[i] - ys[i - 1];
@@ -168,4 +163,202 @@ pub fn fit_bezier(
     }
 
     BezierCurve { points, curve_id, morph_type: morph_type.to_string() }
+}
+
+/// Fit a piecewise cubic Bézier to `samples` (evenly spaced over [0, 1]).
+/// Produces `num_segments` segments (num_segments + 1 control points).
+///
+/// Uses least-squares optimisation over knot Y positions with Catmull-Rom tangents.
+/// With Catmull-Rom tangents, the curve value at any x is a linear function of the
+/// knot Y values (basis functions derived below), so the optimal Y values are the
+/// solution to a small (num_pts × num_pts) normal-equations system.
+///
+/// Catmull-Rom basis for segment i (knots i−1, i, i+1, i+2), local parameter t:
+///   φ[i−1] = −s²t/2
+///   φ[i]   = s³ + 3s²t + st²/2   (interior)
+///   φ[i+1] = s²t/2 + 3st² + t³   (interior)
+///   φ[i+2] = −st²/2
+/// with modified coefficients at the first and last segments where one-sided slopes
+/// replace central differences (see inline comments).
+///
+/// Handle storage uses Zebra3's fractional format: (tx, ty) where
+///   handle = P_start + (tx, ty) × (P_end − P_start)
+pub fn fit_bezier(
+    samples: &[f32],
+    num_segments: usize,
+    curve_id: u32,
+    morph_type: &str,
+) -> BezierCurve {
+    let n = num_segments.max(1);
+    let num_pts = n + 1;
+    let ns = samples.len();
+
+    // ── Build normal equations (AᵀA) y = Aᵀb ──────────────────────────────────
+    // A[j, k] = contribution of knot y_k to the curve value at sample position x_j.
+    let mut ata = vec![vec![0.0f64; num_pts]; num_pts];
+    let mut atb = vec![0.0f64; num_pts];
+
+    const ABSENT: usize = usize::MAX;
+
+    for j in 0..ns {
+        // Map sample index to curve x in [0, 1]
+        let x = j as f64 / (ns - 1).max(1) as f64;
+        // Segment index and local parameter
+        let fi = (x * n as f64).min(n as f64 - 1e-9);
+        let i = fi as usize; // segment [0, n−1]
+        let t = fi - i as f64;
+        let s = 1.0 - t;
+        let (s2, s3) = (s * s, s * s * s);
+        let (t2, t3) = (t * t, t * t * t);
+
+        // (knot_index, coefficient) for up to 4 contributing knots.
+        // ABSENT entries are skipped.
+        //
+        // Derivation sketch (interior segment, 1 ≤ i ≤ n−2):
+        //   B1_y = y_i  + (y_{i+1} − y_{i−1}) / 6        [central diff]
+        //   B2_y = y_{i+1} − (y_{i+2} − y_i) / 6         [central diff]
+        //   B(t) = s³·y_i + 3s²t·B1_y + 3st²·B2_y + t³·y_{i+1}
+        //   → φ[i−1] = −s²t/2,  φ[i] = s³+3s²t+st²/2,
+        //     φ[i+1] = s²t/2+3st²+t³,  φ[i+2] = −st²/2
+        //
+        // First segment (i=0, n≥2): one-sided slope at knot 0 changes B1_y:
+        //   B1_y = (2/3)y_0 + (1/3)y_1  →  φ[0] = s³+2s²t+st²/2, φ[1] = s²t+3st²+t³, φ[2] = −st²/2
+        //
+        // Last segment (i=n−1, n≥2): one-sided slope at knot n changes B2_y:
+        //   B2_y = (1/3)y_{n−1} + (2/3)y_n  →  φ[n−2] = −s²t/2, φ[n−1] = s³+3s²t+st², φ[n] = s²t/2+2st²+t³
+        //
+        // Single segment (n=1): one-sided at both ends:
+        //   φ[0] = s³+2s²t+st²,  φ[1] = s²t+2st²+t³
+        let basis: [(usize, f64); 4] = if n == 1 {
+            [(0,      s3 + 2.0*s2*t + s*t2),
+             (1,      s2*t + 2.0*s*t2 + t3),
+             (ABSENT, 0.0),
+             (ABSENT, 0.0)]
+        } else if i == 0 {
+            // First segment
+            [(0,      s3 + 2.0*s2*t + s*t2/2.0),
+             (1,      s2*t + 3.0*s*t2 + t3),
+             (2,      -s*t2/2.0),
+             (ABSENT, 0.0)]
+        } else if i == n - 1 {
+            // Last segment
+            [(i - 1,  -s2*t/2.0),
+             (i,       s3 + 3.0*s2*t + s*t2),
+             (i + 1,   s2*t/2.0 + 2.0*s*t2 + t3),
+             (ABSENT,  0.0)]
+        } else {
+            // Interior segment
+            [(i - 1,  -s2*t/2.0),
+             (i,       s3 + 3.0*s2*t + s*t2/2.0),
+             (i + 1,   s2*t/2.0 + 3.0*s*t2 + t3),
+             (i + 2,  -s*t2/2.0)]
+        };
+
+        let b = samples[j] as f64;
+        for &(ki, ci) in &basis {
+            if ki == ABSENT { continue; }
+            atb[ki] += ci * b;
+            for &(kj, cj) in &basis {
+                if kj == ABSENT { continue; }
+                ata[ki][kj] += ci * cj;
+            }
+        }
+    }
+
+    // ── Solve AᵀA y = Aᵀb ─────────────────────────────────────────────────────
+    let ys_f64 = gauss_solve(ata, atb);
+    // Clamp to [0, 1] (valid Bézier Y range; optimizer may push slightly outside)
+    let ys: Vec<f32> = ys_f64.iter().map(|&y| (y as f32).clamp(0.0, 1.0)).collect();
+
+    // ── Build control points with Catmull-Rom handles ──────────────────────────
+    let xs: Vec<f32> = (0..num_pts).map(|i| i as f32 / n as f32).collect();
+
+    let slopes: Vec<f32> = (0..num_pts)
+        .map(|i| {
+            if i == 0 {
+                (ys[1] - ys[0]) / (xs[1] - xs[0])
+            } else if i == num_pts - 1 {
+                (ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1])
+            } else {
+                (ys[i + 1] - ys[i - 1]) / (xs[i + 1] - xs[i - 1])
+            }
+        })
+        .collect();
+
+    let mut points = Vec::with_capacity(num_pts);
+    for i in 0..num_pts {
+        let outgoing = if i < n {
+            let dx = xs[i + 1] - xs[i];
+            let dy_seg = ys[i + 1] - ys[i];
+            let handle_y = ys[i] + slopes[i] * dx / 3.0;
+            let ty = if dy_seg.abs() > 1e-6 {
+                ((handle_y - ys[i]) / dy_seg).clamp(-4.0, 5.0)
+            } else {
+                1.0 / 3.0
+            };
+            Some((1.0_f32 / 3.0, ty))
+        } else {
+            None
+        };
+
+        let incoming = if i > 0 {
+            let dx = xs[i] - xs[i - 1];
+            let dy_seg = ys[i] - ys[i - 1];
+            let handle_y = ys[i] - slopes[i] * dx / 3.0;
+            let ty = if dy_seg.abs() > 1e-6 {
+                ((handle_y - ys[i - 1]) / dy_seg).clamp(-4.0, 5.0)
+            } else {
+                2.0 / 3.0
+            };
+            Some((2.0_f32 / 3.0, ty))
+        } else {
+            None
+        };
+
+        points.push(ControlPoint { position: (xs[i], ys[i]), incoming, outgoing });
+    }
+
+    BezierCurve { points, curve_id, morph_type: morph_type.to_string() }
+}
+
+/// Gaussian elimination with partial pivoting. Solves ax = b, returns x.
+fn gauss_solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Vec<f64> {
+    let n = b.len();
+
+    for col in 0..n {
+        // Partial pivoting: swap in the row with the largest pivot element
+        let pivot = (col..n)
+            .max_by(|&i, &j| {
+                a[i][col].abs().partial_cmp(&a[j][col].abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or(col);
+        a.swap(col, pivot);
+        b.swap(col, pivot);
+
+        if a[col][col].abs() < 1e-12 {
+            continue; // near-singular column; leave as zero
+        }
+
+        for row in col + 1..n {
+            let factor = a[row][col] / a[col][col];
+            for k in col..n {
+                let v = a[col][k] * factor;
+                a[row][k] -= v;
+            }
+            let v = b[col] * factor;
+            b[row] -= v;
+        }
+    }
+
+    // Back substitution
+    let mut x = vec![0.0f64; n];
+    for i in (0..n).rev() {
+        if a[i][i].abs() < 1e-12 {
+            continue;
+        }
+        let sum: f64 = (i + 1..n).map(|j| a[i][j] * x[j]).sum();
+        x[i] = (b[i] - sum) / a[i][i];
+    }
+    x
 }

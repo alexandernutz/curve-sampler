@@ -1,7 +1,7 @@
 //! Point-wise curve transforms that operate on the current curve.
 //! All functions take a BezierCurve, operate on a sample array, and return a new BezierCurve.
 
-use crate::bezier::{fit_bezier, BezierCurve};
+use crate::bezier::{fit_bezier, fit_bezier_interp, BezierCurve};
 
 const GEO_SAMPLES: usize = 2048;
 const GEO_SEGMENTS: usize = 20;
@@ -32,7 +32,7 @@ fn geo_resample(curve: &BezierCurve) -> Vec<f32> {
 }
 
 fn geo_fit(samples: Vec<f32>, src: &BezierCurve) -> BezierCurve {
-    fit_bezier(&samples, GEO_SEGMENTS, src.curve_id, &src.morph_type)
+    fit_bezier_interp(&samples, GEO_SEGMENTS, src.curve_id, &src.morph_type)
 }
 
 fn spec_resample(curve: &BezierCurve) -> Vec<f32> {

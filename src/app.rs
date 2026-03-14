@@ -1,6 +1,7 @@
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
-use crate::{bezier::BezierCurve, zebra_format};
+use crate::bezier::BezierCurve;
+use crate::zebra_format;
 
 #[derive(PartialEq)]
 enum PlayAs {
@@ -26,7 +27,7 @@ impl App {
             copy_output: String::new(),
             curve: None,
             fft_size: 2048,
-            status: "Ready — paste a Zebra3 curve to begin.".into(),
+            status: "Ready — paste a Zebra(lette) 3 curve or click a preset.".into(),
             play_freq: 220.0,
             playing: false,
             play_as: PlayAs::Waveform,
@@ -36,17 +37,34 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Keyboard shortcuts — suppressed while any text widget has focus.
+        if !ctx.wants_keyboard_input() {
+            if ctx.input(|i| i.key_pressed(egui::Key::L)) {
+                self.load_curve();
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+                self.toggle_play();
+            }
+        }
+
         TopBottomPanel::top("top").show(ctx, |ui| {
-            ui.heading("Zebra Curve Transform");
+            ui.heading("Curve Jumbler");
         });
 
         SidePanel::left("io").min_width(280.0).show(ctx, |ui| {
-            // ── Presets ──────────────────────────────────────────────────────
+            // ── SVG input ─────────────────────────────────────────────────────
+            ui.heading("Curve Input");
+            ui.label("1. Paste a curve from Zebra(lette) 3, or click a preset below.");
+            ui.label("2. Press Load Curve [L].");
+            ui.label("3. Transform / Playback / Export.");
+            ui.add_space(4.0);
             ui.label("Geometry presets:");
             ui.horizontal_wrapped(|ui| {
                 for &(label, gen) in crate::waveforms::GEO_PRESETS {
                     if ui.small_button(label).clicked() {
-                        self.paste_input = gen();
+                        let text = gen();
+                        self.paste_input = text.clone();
+                        self.copy_output = text;
                     }
                 }
             });
@@ -54,16 +72,16 @@ impl eframe::App for App {
             ui.horizontal_wrapped(|ui| {
                 for &(label, gen) in crate::waveforms::SPEC_PRESETS {
                     if ui.small_button(label).clicked() {
-                        self.paste_input = gen();
+                        let text = gen();
+                        self.paste_input = text.clone();
+                        self.copy_output = text;
                     }
                 }
             });
-            ui.separator();
-
-            // ── Input ─────────────────────────────────────────────────────────
-            ui.heading("Input (paste from Zebra3)");
+            ui.add_space(4.0);
             egui::ScrollArea::vertical()
                 .id_salt("paste_scroll")
+                .min_scrolled_height(120.0)
                 .max_height(120.0)
                 .show(ui, |ui| {
                     ui.add(
@@ -72,53 +90,64 @@ impl eframe::App for App {
                             .font(egui::TextStyle::Monospace),
                     );
                 });
-
-            if ui.button("Load Curve").clicked() {
-                match zebra_format::parse(&self.paste_input) {
-                    Ok(c) => {
-                        self.status = format!("Loaded {} points.", c.points.len());
-                        self.curve = Some(c);
-                        self.copy_output.clear();
-                    }
-                    Err(e) => self.status = format!("Parse error: {e}"),
-                }
+            if ui.button("Load Curve  [L]").clicked() {
+                self.load_curve();
             }
-
-            ui.add_space(6.0);
             ui.separator();
-            ui.add_space(4.0);
 
+            // ── Curve Transforms ──────────────────────────────────────────────
+            ui.heading("Curve Transforms");
             ui.horizontal(|ui| {
-                if ui.button("Geometry → Spectrum").clicked() {
+                if ui.button("Geometry -> Spectrum").clicked() {
                     self.run_transform(Direction::Forward);
                 }
-                if ui.button("Spectrum → Geometry").clicked() {
+                if ui.button("Spectrum -> Geometry").clicked() {
                     self.run_transform(Direction::Inverse);
                 }
             });
 
-            ui.add_space(6.0);
-            ui.separator();
+            ui.label("Geometry:");
+            ui.horizontal_wrapped(|ui| {
+                use crate::curve_ops as ops;
+                let btns: &[(&str, fn(&BezierCurve) -> BezierCurve)] = &[
+                    ("Flip Y",    ops::flip_y),
+                    ("Flip X",    ops::flip_x),
+                    ("Rectify",   ops::rectify),
+                    ("Fold",      ops::fold),
+                    ("Quantize",  ops::quantize),
+                    ("DC",        ops::dc_remove),
+                    ("Jitter",    ops::geo_jitter),
+                ];
+                for &(label, op) in btns {
+                    if ui.small_button(label).clicked() {
+                        self.apply_op(op, label);
+                    }
+                }
+            });
 
-            ui.heading("Output (copy to Zebra3)");
-            egui::ScrollArea::vertical()
-                .id_salt("copy_scroll")
-                .max_height(120.0)
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.copy_output)
-                            .desired_width(f32::INFINITY)
-                            .font(egui::TextStyle::Monospace),
-                    );
-                });
+            ui.label("Spectrum:");
+            ui.horizontal_wrapped(|ui| {
+                use crate::curve_ops as ops;
+                let btns: &[(&str, fn(&BezierCurve) -> BezierCurve)] = &[
+                    ("Brighten",  ops::brighten),
+                    ("Darken",    ops::darken),
+                    ("Thin",      ops::thin),
+                    ("Oct Up",    ops::octave_up),
+                    ("Jitter",    ops::spec_jitter),
+                ];
+                for &(label, op) in btns {
+                    if ui.small_button(label).clicked() {
+                        self.apply_op(op, label);
+                    }
+                }
+            });
 
-            if ui.button("Copy to clipboard").clicked() {
-                ctx.copy_text(self.copy_output.clone());
+            if ui.small_button("Harmonize").clicked() {
+                self.harmonize();
             }
-
-            ui.add_space(6.0);
             ui.separator();
 
+            // ── Playback ──────────────────────────────────────────────────────
             ui.heading("Playback");
             ui.add(
                 egui::Slider::new(&mut self.play_freq, 55.0..=880.0)
@@ -130,33 +159,30 @@ impl eframe::App for App {
                 ui.radio_value(&mut self.play_as, PlayAs::Waveform, "Waveform");
                 ui.radio_value(&mut self.play_as, PlayAs::Spectrum, "Spectrum");
             });
-            ui.horizontal(|ui| {
-                let play_label = if self.playing { "■ Stop" } else { "▶ Play" };
-                if ui.button(play_label).clicked() {
-                    if self.playing {
-                        crate::audio::stop();
-                        self.playing = false;
-                    } else if let Some(c) = &self.curve {
-                        let samples = match self.play_as {
-                            PlayAs::Waveform => Some(c.sample(2048)),
-                            PlayAs::Spectrum => {
-                                let s = crate::transform::spectrum_to_waveform_samples(c, self.fft_size);
-                                Some(s)
-                            }
-                        };
-                        #[cfg(target_arch = "wasm32")]
-                        if let Some(s) = samples {
-                            crate::audio::play_once(&s, self.play_freq);
-                            self.playing = true;
-                        }
-                        #[cfg(not(target_arch = "wasm32"))]
-                        { let _ = samples; self.status = "Audio only available in browser.".into(); }
-                    }
-                }
-            });
-
-            ui.add_space(6.0);
+            let play_label = if self.playing { "■ Stop  [Space]" } else { "▶ Play  [Space]" };
+            if ui.button(play_label).clicked() {
+                self.toggle_play();
+            }
             ui.separator();
+
+            // ── Export ────────────────────────────────────────────────────────
+            ui.heading("Export");
+            egui::ScrollArea::vertical()
+                .id_salt("copy_scroll")
+                .min_scrolled_height(120.0)
+                .max_height(120.0)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.copy_output)
+                            .desired_width(f32::INFINITY)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                });
+            if ui.button("Copy to clipboard").clicked() {
+                ctx.copy_text(self.copy_output.clone());
+            }
+            ui.separator();
+
             ui.label(&self.status);
         }); // SidePanel
 
@@ -177,6 +203,58 @@ enum Direction {
 }
 
 impl App {
+    fn load_curve(&mut self) {
+        match zebra_format::parse(&self.paste_input) {
+            Ok(c) => {
+                self.status = format!("Loaded {} points.", c.points.len());
+                self.curve = Some(c);
+                self.copy_output.clear();
+            }
+            Err(e) => self.status = format!("Parse error: {e}"),
+        }
+    }
+
+    fn toggle_play(&mut self) {
+        if self.playing {
+            crate::audio::stop();
+            self.playing = false;
+        } else if let Some(c) = &self.curve {
+            let samples = match self.play_as {
+                PlayAs::Waveform => c.sample(2048),
+                PlayAs::Spectrum => crate::transform::spectrum_to_waveform_samples(c, self.fft_size),
+            };
+            #[cfg(target_arch = "wasm32")]
+            {
+                crate::audio::play_once(&samples, self.play_freq);
+                self.playing = true;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let _ = samples;
+                self.status = "Audio only available in browser.".into();
+            }
+        }
+    }
+
+    fn apply_op(&mut self, op: fn(&crate::bezier::BezierCurve) -> crate::bezier::BezierCurve, label: &str) {
+        crate::audio::stop();
+        self.playing = false;
+        if let Some(curve) = self.curve.clone() {
+            let new_curve = op(&curve);
+            self.copy_output = zebra_format::generate(&new_curve);
+            self.status = format!("{label}.");
+            self.curve = Some(new_curve);
+        } else {
+            self.status = "No curve loaded.".into();
+        }
+    }
+
+    fn harmonize(&mut self) {
+        // G→S→G in one click: symmetrises the waveform (phase is discarded, then reconstructed).
+        self.run_transform(Direction::Forward);
+        self.run_transform(Direction::Inverse);
+    }
+
     fn run_transform(&mut self, dir: Direction) {
         crate::audio::stop();
         self.playing = false;

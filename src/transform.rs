@@ -2,9 +2,10 @@ use rustfft::{num_complex::Complex, FftPlanner};
 
 use crate::bezier::{fit_bezier, BezierCurve};
 
-/// Number of Bézier segments used when fitting the transform output.
-/// Matches LOG_FREQ_SCALE so that each fit point at x=j/10 corresponds to harmonic 2^j.
-const FIT_SEGMENTS: usize = 10;
+/// Segments for spectrum output — one per octave band, semantically grounded.
+const SPEC_FIT_SEGMENTS: usize = 10;
+/// Segments for geometry output — higher resolution for time-domain waveforms.
+const GEO_FIT_SEGMENTS: usize = 20;
 
 /// Zebra3 maps harmonic k to curve x-position: x = log2(k) / LOG_FREQ_SCALE.
 ///
@@ -55,17 +56,17 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
         magnitudes
     };
 
-    // Place control points at x = j/10 (j = 0..FIT_SEGMENTS), each corresponding to
+    // Place control points at x = j/10 (j = 0..SPEC_FIT_SEGMENTS), each corresponding to
     // harmonic k = 2^j via the formula x = log2(k)/10.
     // normalized[k] holds the FFT magnitude for harmonic k (buf[k] in the forward FFT).
-    let log_samples: Vec<f32> = (0..=FIT_SEGMENTS)
+    let log_samples: Vec<f32> = (0..=SPEC_FIT_SEGMENTS)
         .map(|j| {
             let k = 1usize << j; // 2^j = harmonic at x = j/10
             normalized.get(k).copied().unwrap_or(0.0)
         })
         .collect();
 
-    Ok(fit_bezier(&log_samples, FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
+    Ok(fit_bezier(&log_samples, SPEC_FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
 }
 
 /// Frequency domain → time domain (zero-phase reconstruction).
@@ -97,7 +98,7 @@ pub fn spectrum_to_geometry(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
     let mut normalized: Vec<f32> = real.iter().map(|&x| (x - min) / range).collect();
     phase_normalize(&mut normalized);
 
-    Ok(fit_bezier(&normalized, FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
+    Ok(fit_bezier(&normalized, GEO_FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
 }
 
 /// Frequency domain → audio samples (zero-phase reconstruction, no Bézier fit).

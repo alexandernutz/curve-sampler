@@ -2,6 +2,7 @@ mod app;
 mod audio;
 mod bezier;
 mod curve_editor;
+mod curve_ops;
 mod midi;
 mod transform;
 pub mod waveforms;
@@ -14,7 +15,7 @@ pub fn run_native() {
     env_logger::init();
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "Zebra Curve Transform",
+        "Curve Jumbler",
         native_options,
         Box::new(|cc| Ok(Box::new(App::new(cc)))),
     )

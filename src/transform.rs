@@ -21,7 +21,7 @@ const LOG_FREQ_SCALE: f32 = 10.0;
 
 /// Sample the spectrum curve at Zebra3's log-frequency positions.
 /// Returns amplitude for each harmonic k = 1..num_harmonics (index 0 = harmonic 1).
-fn sample_log_freq(curve: &BezierCurve, num_harmonics: usize) -> Vec<f32> {
+pub fn sample_log_freq(curve: &BezierCurve, num_harmonics: usize) -> Vec<f32> {
     (1..=num_harmonics)
         .map(|k| curve.eval((k as f32).log2() / LOG_FREQ_SCALE))
         .collect()

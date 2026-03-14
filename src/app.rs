@@ -16,6 +16,7 @@ pub struct App {
     fft_size: usize,
     status: String,
     play_freq: f32,
+    volume: f32,
     playing: bool,
     play_as: PlayAs,
 }
@@ -29,6 +30,7 @@ impl App {
             fft_size: 2048,
             status: "Ready — paste a Zebra(lette) 3 curve or click a preset.".into(),
             play_freq: 220.0,
+            volume: 0.7,
             playing: false,
             play_as: PlayAs::Waveform,
         }
@@ -154,6 +156,13 @@ impl eframe::App for App {
                     .text("Hz")
                     .logarithmic(true),
             );
+            let vol_resp = ui.add(
+                egui::Slider::new(&mut self.volume, 0.0..=1.0)
+                    .text("Volume"),
+            );
+            if vol_resp.changed() {
+                crate::audio::set_gain(self.volume);
+            }
             ui.horizontal(|ui| {
                 ui.label("Render as:");
                 ui.radio_value(&mut self.play_as, PlayAs::Waveform, "Waveform");
@@ -208,7 +217,6 @@ impl App {
             Ok(c) => {
                 self.status = format!("Loaded {} points.", c.points.len());
                 self.curve = Some(c);
-                self.copy_output.clear();
             }
             Err(e) => self.status = format!("Parse error: {e}"),
         }
@@ -219,18 +227,24 @@ impl App {
             crate::audio::stop();
             self.playing = false;
         } else if let Some(c) = &self.curve {
-            let samples = match self.play_as {
-                PlayAs::Waveform => c.sample(2048),
-                PlayAs::Spectrum => crate::transform::spectrum_to_waveform_samples(c, self.fft_size),
-            };
             #[cfg(target_arch = "wasm32")]
             {
-                crate::audio::play_once(&samples, self.play_freq);
+                match self.play_as {
+                    PlayAs::Waveform => {
+                        let samples = c.sample(2048);
+                        crate::audio::play_once(&samples, self.play_freq, self.volume);
+                    }
+                    PlayAs::Spectrum => {
+                        // Use PeriodicWave additive synthesis — browser bandlimits per pitch,
+                        // no aliasing (unlike an IFFT buffer played at high playback_rate).
+                        let harmonics = crate::transform::sample_log_freq(c, self.fft_size / 2);
+                        crate::audio::play_spectrum(&harmonics, self.play_freq, self.volume);
+                    }
+                }
                 self.playing = true;
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = samples;
                 self.status = "Audio only available in browser.".into();
             }
         }

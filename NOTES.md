@@ -40,6 +40,13 @@ menu as Sine-o-matic and other curve-to-curve transforms, not a button in the ed
 - A cubic Bézier is a polynomial; sin(x) is transcendental. Even the round-trip
   (sine → spectrum → geometry → sine) is not exact.
 
+## Possible Zebralette 3 bugs
+
+**Pasted spectral curves sometimes inaudible in Zebralette 3 (not in Zebra 3)**
+- Observed: curves that play correctly in Zebra 3 produce no sound in Zebralette 3 when pasted, especially in spectral mode.
+- Hypothesis: Zebralette 3 may have a stricter parser, a different spectral sampling range, or a gain-staging difference vs. Zebra 3.
+- Not yet isolated to a specific curve or format property. Worth testing with a known-good minimal curve (e.g. pure fundamental) to narrow down.
+
 ## Known limitations
 
 **Phase loss in geometry↔spectrum conversion**

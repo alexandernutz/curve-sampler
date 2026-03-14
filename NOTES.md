@@ -8,11 +8,10 @@ Intended workflow is in place. Letting it rest to get perspective on:
 
 ## Open questions / pending thoughts
 
-**No domain state on the curve**
-The transforms are just curve-to-curve operations; there's no tag saying "this is geometry"
-or "this is spectrum". The App tracks `domain` as a display hint but doesn't gate anything.
-This is intentional (experimenting with double-applying etc. is the point), but it means the
-UI gives no warning if you apply the wrong transform.
+**No domain state on the curve** *(decided)*
+A curve is just a curve. There is no "current domain" — both transform buttons are always
+available and applying the same transform twice is intentional (exploring round-trips,
+double-spectralization, etc.). The `Domain` enum has been removed entirely.
 
 **Spectrum-aware fitting when generating a spectral curve**
 Zebra3's own spectral curves use an "L-shape": a steep drop to y=0, then a flat line.

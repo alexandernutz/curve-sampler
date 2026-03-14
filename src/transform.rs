@@ -2,16 +2,6 @@ use rustfft::{num_complex::Complex, FftPlanner};
 
 use crate::bezier::{fit_bezier, BezierCurve};
 
-/// Which domain the curve currently represents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Domain {
-    #[default]
-    /// Time domain — x is phase (0–1 cycle), y is amplitude (0.5 = zero)
-    Geometry,
-    /// Frequency domain — x is harmonic index, y is magnitude
-    Spectrum,
-}
-
 /// Number of Bézier segments used when fitting the transform output.
 /// Matches LOG_FREQ_SCALE so that each fit point at x=j/10 corresponds to harmonic 2^j.
 const FIT_SEGMENTS: usize = 10;

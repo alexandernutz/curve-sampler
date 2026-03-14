@@ -1,6 +1,6 @@
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 
-use crate::{bezier::BezierCurve, transform::Domain, zebra_format};
+use crate::{bezier::BezierCurve, zebra_format};
 
 #[derive(PartialEq)]
 enum PlayAs {
@@ -12,7 +12,6 @@ pub struct App {
     paste_input: String,
     copy_output: String,
     curve: Option<BezierCurve>,
-    domain: Domain,
     fft_size: usize,
     status: String,
     play_freq: f32,
@@ -26,7 +25,6 @@ impl App {
             paste_input: String::new(),
             copy_output: String::new(),
             curve: None,
-            domain: Domain::Geometry,
             fft_size: 2048,
             status: "Ready — paste a Zebra3 curve to begin.".into(),
             play_freq: 220.0,
@@ -178,11 +176,7 @@ impl App {
         match result {
             Ok(new_curve) => {
                 self.copy_output = zebra_format::generate(&new_curve);
-                self.domain = match dir {
-                    Direction::Forward => Domain::Spectrum,
-                    Direction::Inverse => Domain::Geometry,
-                };
-                self.status = format!("Transformed → {:?}.", self.domain);
+                self.status = "Transformed.".into();
                 self.curve = Some(new_curve);
             }
             Err(e) => self.status = format!("Transform error: {e}"),

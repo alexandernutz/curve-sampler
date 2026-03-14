@@ -41,6 +41,26 @@ impl eframe::App for App {
         });
 
         SidePanel::left("io").min_width(280.0).show(ctx, |ui| {
+            // ── Presets ──────────────────────────────────────────────────────
+            ui.label("Geometry presets:");
+            ui.horizontal_wrapped(|ui| {
+                for &(label, gen) in crate::waveforms::GEO_PRESETS {
+                    if ui.small_button(label).clicked() {
+                        self.paste_input = gen();
+                    }
+                }
+            });
+            ui.label("Spectrum presets:");
+            ui.horizontal_wrapped(|ui| {
+                for &(label, gen) in crate::waveforms::SPEC_PRESETS {
+                    if ui.small_button(label).clicked() {
+                        self.paste_input = gen();
+                    }
+                }
+            });
+            ui.separator();
+
+            // ── Input ─────────────────────────────────────────────────────────
             ui.heading("Input (paste from Zebra3)");
             egui::ScrollArea::vertical()
                 .id_salt("paste_scroll")

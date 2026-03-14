@@ -4,6 +4,7 @@ mod bezier;
 mod curve_editor;
 mod midi;
 mod transform;
+pub mod waveforms;
 mod zebra_format;
 
 pub use app::App;

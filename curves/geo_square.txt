@@ -1,0 +1,7 @@
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/3F800000'
+PX XY = '3EFF7CEE/3F800000'
+PX XY = '3F004189/0'
+PX XY = '3F800000/0'

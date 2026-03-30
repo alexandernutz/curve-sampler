@@ -19,6 +19,9 @@ pub struct App {
     volume: f32,
     playing: bool,
     play_as: PlayAs,
+    /// All curve states; `history[history_idx]` is the current state.
+    history: Vec<BezierCurve>,
+    history_idx: usize,
 }
 
 impl App {
@@ -33,6 +36,8 @@ impl App {
             volume: 0.7,
             playing: false,
             play_as: PlayAs::Waveform,
+            history: Vec::new(),
+            history_idx: 0,
         }
     }
 }
@@ -41,6 +46,13 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Keyboard shortcuts — suppressed while any text widget has focus.
         if !ctx.wants_keyboard_input() {
+            let (ctrl_z, ctrl_y, ctrl_shift_z) = ctx.input(|i| (
+                i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Z),
+                i.modifiers.ctrl && i.key_pressed(egui::Key::Y),
+                i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z),
+            ));
+            if ctrl_z { self.undo(); }
+            if ctrl_y || ctrl_shift_z { self.redo(); }
             if ctx.input(|i| i.key_pressed(egui::Key::L)) {
                 self.load_curve();
             }
@@ -95,6 +107,14 @@ impl eframe::App for App {
             if ui.button("Load Curve  [L]").clicked() {
                 self.load_curve();
             }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(self.history_idx > 0, egui::Button::new("Undo [Ctrl+Z]")).clicked() {
+                    self.undo();
+                }
+                if ui.add_enabled(self.history_idx + 1 < self.history.len(), egui::Button::new("Redo [Ctrl+Y]")).clicked() {
+                    self.redo();
+                }
+            });
             ui.separator();
 
             // ── Curve Transforms ──────────────────────────────────────────────
@@ -216,11 +236,48 @@ enum Direction {
 }
 
 impl App {
+    /// Push `curve` as the new current state, discarding any forward redo history.
+    fn set_curve(&mut self, curve: BezierCurve) {
+        self.history.truncate(self.history_idx + if self.history.is_empty() { 0 } else { 1 });
+        self.history.push(curve.clone());
+        self.history_idx = self.history.len() - 1;
+        // Keep at most 50 entries
+        if self.history.len() > 50 {
+            self.history.drain(0..self.history.len() - 50);
+            self.history_idx = self.history.len() - 1;
+        }
+        self.curve = Some(curve);
+    }
+
+    fn undo(&mut self) {
+        if self.history_idx > 0 {
+            self.history_idx -= 1;
+            let c = self.history[self.history_idx].clone();
+            self.copy_output = zebra_format::generate(&c);
+            self.curve = Some(c);
+            self.status = format!("Undo ({}/{}).", self.history_idx + 1, self.history.len());
+        } else {
+            self.status = "Nothing to undo.".into();
+        }
+    }
+
+    fn redo(&mut self) {
+        if self.history_idx + 1 < self.history.len() {
+            self.history_idx += 1;
+            let c = self.history[self.history_idx].clone();
+            self.copy_output = zebra_format::generate(&c);
+            self.curve = Some(c);
+            self.status = format!("Redo ({}/{}).", self.history_idx + 1, self.history.len());
+        } else {
+            self.status = "Nothing to redo.".into();
+        }
+    }
+
     fn load_curve(&mut self) {
         match zebra_format::parse(&self.paste_input) {
             Ok(c) => {
                 self.status = format!("Loaded {} points.", c.points.len());
-                self.curve = Some(c);
+                self.set_curve(c);
             }
             Err(e) => self.status = format!("Parse error: {e}"),
         }
@@ -261,7 +318,7 @@ impl App {
             let new_curve = op(&curve);
             self.copy_output = zebra_format::generate(&new_curve);
             self.status = format!("{label}.");
-            self.curve = Some(new_curve);
+            self.set_curve(new_curve);
         } else {
             self.status = "No curve loaded.".into();
         }
@@ -296,7 +353,7 @@ impl App {
             Ok(new_curve) => {
                 self.copy_output = zebra_format::generate(&new_curve);
                 self.status = "Transformed.".into();
-                self.curve = Some(new_curve);
+                self.set_curve(new_curve);
             }
             Err(e) => self.status = format!("Transform error: {e}"),
         }

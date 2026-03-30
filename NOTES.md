@@ -13,15 +13,20 @@ A curve is just a curve. There is no "current domain" — both transform buttons
 available and applying the same transform twice is intentional (exploring round-trips,
 double-spectralization, etc.). The `Domain` enum has been removed entirely.
 
-**Spectrum-aware fitting when generating a spectral curve**
-Zebra3's own spectral curves use an "L-shape": a steep drop to y=0, then a flat line.
-This guarantees that left-edge harmonic samples land on the flat zero portion.
-Our Catmull-Rom fit produces smooth curves instead — which might accidentally put nonzero
-values at harmonic positions that should be silent.
-Worth considering: when fitting a spectrum output curve, should we snap control points to
-step-function-like shapes (honoring the discrete-cell semantics) rather than smooth
-interpolation? Not obvious this is the right call — smooth curves are also valid and may
-be what the user wants. Needs more thought.
+**Spectrum-aware fitting when generating a spectral curve** *(decided)*
+The G→S stepped mode now uses **per-harmonic steps**: each integer harmonic k gets its own
+step covering x = [log₂(k)/10, log₂(k+1)/10] with that harmonic's exact FFT amplitude.
+Steps narrow as frequency increases (log spacing), which is semantically exact for Z3's
+left-edge sampling. Contrast: the old octave-band version gave all harmonics 4-7 the same
+amplitude when only harmonic 4 was present — a bug, now fixed.
+
+Adjacent steps with amplitude difference < 1% (SIMPLIFY_TOL = 0.01) are merged to avoid
+emitting hundreds of redundant double-points for flat spectral regions. The result is a
+minimal step curve: long silent bands collapse to one step, individual peaks stay distinct.
+Capped at 128 harmonics (MAX_STEP_HARMONICS) with a noise floor of 0.2% (STEP_FLOOR).
+
+The G→S smooth mode still uses a least-squares Bézier fit to a log-dense amplitude array.
+That is a separate quality concern (the smooth fit may underrepresent narrow spectral peaks).
 
 ## Positioning relative to Zebra3
 

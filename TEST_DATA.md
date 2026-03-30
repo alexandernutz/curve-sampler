@@ -173,3 +173,47 @@ Decoded:
 | 3     | 1.0000 | 0.000 | all higher harmonics = 0 |
 
 P1.x = log₂(2)/10, P2.x = log₂(3)/10 — both float32-exact to within 5 ULP.
+
+### Single-harmonic spectral curves — confirmed 2026-03-30
+
+All three confirmed working in Zebra3: each plays as a pure sine at the indicated harmonic.
+Structure: flat-zero segment up to the target harmonic's x position, straight rise to y=1 at
+that position, straight drop to y=0 at the next harmonic's x position, flat zero to end.
+Handles are (1/3, 1/3) / (2/3, 2/3) throughout (straight-line Béziers).
+
+Hex positions: h(k) = log₂(k)/10 → h(2)=3DCCCCCD, h(3)=3E224CD7, h(4)=3E4CCCCD, h(5)=3E6DC3F3.
+
+**Harmonic 2 only:**
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/0' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3DCCCCCD/3F800000' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E224CD7/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3F800000/0' IV = '3F2AAAAB/3F2AAAAB'
+```
+
+**Harmonic 3 only:**
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/0' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3DCCCCCD/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E224CD7/3F800000' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E4CCCCD/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3F800000/0' IV = '3F2AAAAB/3F2AAAAB'
+```
+
+**Harmonic 4 only:**
+```
+// u-he Bezier Curve
+// Version 1.0
+Curve ID = 1 MorphType = 'Peaks And Valleys'
+PX XY = '0/0' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E224CD7/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E4CCCCD/3F800000' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3E6DC3F3/0' IV = '3F2AAAAB/3F2AAAAB' OV = '3EAAAAAB/3EAAAAAB'
+PX XY = '3F800000/0' IV = '3F2AAAAB/3F2AAAAB'
+```

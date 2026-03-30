@@ -65,12 +65,15 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
     Ok(fit_bezier(&log_dense(&normalized), SPEC_FIT_SEGMENTS, curve.curve_id, &curve.morph_type))
 }
 
-/// Geometry → Spectrum using step functions (L-shapes, Zebra3 style).
+/// Geometry → Spectrum using per-harmonic step functions (Zebra3 style).
 ///
-/// Produces a curve built from double-point steps at octave boundaries — the same
-/// idiom Zebra3 uses in its own spectral curves. Each octave band holds a constant
-/// amplitude, with instant jumps at x = j/10 boundaries. Semantically exact: the
-/// curve value at each harmonic's left-edge x position matches the FFT magnitude.
+/// Each harmonic k gets its own step covering x = [log₂(k)/10, log₂(k+1)/10], with
+/// height equal to that harmonic's FFT magnitude. Steps become progressively narrower
+/// at higher frequencies, matching the log-frequency spacing Z3 uses internally.
+///
+/// Harmonics above a noise floor and up to MAX_STEP_HARMONICS are included explicitly;
+/// the rest are set to zero. This avoids the octave-band artifact where all harmonics
+/// in one octave (e.g. 4, 5, 6, 7) would incorrectly share the same amplitude.
 pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Result<BezierCurve, String> {
     let samples = curve.sample(fft_size);
     let mut buf: Vec<Complex<f32>> = samples
@@ -91,21 +94,50 @@ pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Resul
         magnitudes
     };
 
-    // Sample at each octave boundary: harmonic 2^j at x = j/SPEC_FIT_SEGMENTS
-    let amps: Vec<f32> = (0..=SPEC_FIT_SEGMENTS)
-        .map(|j| normalized.get(1 << j).copied().unwrap_or(0.0))
-        .collect();
+    // Per-harmonic steps. Cap at MAX_STEP_HARMONICS; only go as far as the last harmonic
+    // above STEP_FLOOR.
+    const MAX_STEP_HARMONICS: usize = 128;
+    const STEP_FLOOR: f32 = 0.002;
+    // Adjacent steps are merged when their amplitudes differ by less than SIMPLIFY_TOL,
+    // removing redundant double-points (e.g. long runs of near-zero harmonics).
+    const SIMPLIFY_TOL: f32 = 0.01;
 
-    // Build step-function curve with double-point trick (same idiom as spec_chaos_steps).
-    // Two consecutive points at the same x create a C0 discontinuity (instant step).
-    let n = SPEC_FIT_SEGMENTS as f32;
-    let mut points = vec![step_cp(0.0, amps[0])];
-    for j in 1..SPEC_FIT_SEGMENTS {
-        let x = j as f32 / n;
-        points.push(step_cp(x, amps[j - 1])); // end of previous step
-        points.push(step_cp(x, amps[j]));      // start of next step
+    let highest = (1..num_harmonics.min(MAX_STEP_HARMONICS + 1))
+        .rev()
+        .find(|&k| normalized.get(k).copied().unwrap_or(0.0) > STEP_FLOOR)
+        .unwrap_or(1);
+
+    let amp = |k: usize| normalized.get(k).copied().unwrap_or(0.0);
+    let xpos = |k: usize| (k as f32).log2() / LOG_FREQ_SCALE;
+
+    // Build a simplified step list: (x_start, amplitude).
+    // A new entry is emitted only when the amplitude changes by more than SIMPLIFY_TOL
+    // relative to the most recently emitted step. This merges long runs of equal-amplitude
+    // harmonics (e.g. all-zero regions) into a single step.
+    let mut steps: Vec<(f32, f32)> = vec![(0.0, amp(1))];
+    let mut current_level = amp(1);
+    for k in 2..=highest {
+        let a = amp(k);
+        if (a - current_level).abs() > SIMPLIFY_TOL {
+            steps.push((xpos(k), a));
+            current_level = a;
+        }
     }
-    points.push(step_cp(1.0, amps[SPEC_FIT_SEGMENTS]));
+    // Terminate with a zero step if the tail is non-zero.
+    if current_level > SIMPLIFY_TOL {
+        let x_tail = xpos(highest + 1).min(1.0);
+        steps.push((x_tail, 0.0));
+    }
+
+    // Convert step list to Bezier points using the double-point trick.
+    let mut points = vec![step_cp(steps[0].0, steps[0].1)];
+    for i in 1..steps.len() {
+        let (x, a) = steps[i];
+        let prev_a = steps[i - 1].1;
+        points.push(step_cp(x, prev_a)); // end of previous step
+        points.push(step_cp(x, a));      // start of current step
+    }
+    points.push(step_cp(1.0, steps.last().map(|s| s.1).unwrap_or(0.0)));
 
     Ok(BezierCurve { points, curve_id: curve.curve_id, morph_type: curve.morph_type.clone() })
 }

@@ -61,6 +61,56 @@ impl BezierCurve {
         let u = find_u_for_x(p0.0, p1.0, p2.0, p3.0, t);
         cubic_bezier(p0.1, p1.1, p2.1, p3.1, u)
     }
+
+    pub fn simplify(&mut self, tolerance: f32) {
+        if self.points.len() <= 2 {
+            return;
+        }
+
+        let mut new_points = Vec::new();
+        new_points.push(self.points[0].clone());
+
+        let mut i = 0;
+        while i < self.points.len() - 1 {
+            let mut j = i + 1;
+            while j < self.points.len() - 1 {
+                // Check if point j can be removed by merging segments [i, j] and [j, j+1]
+                let p_prev = self.points[i].position;
+                let p_curr = self.points[j].position;
+                let p_next = self.points[j + 1].position;
+
+                // Are they collinear?
+                let cross_product = (p_curr.1 - p_prev.1) * (p_next.0 - p_prev.0) - (p_curr.0 - p_prev.0) * (p_next.1 - p_prev.1);
+                let is_collinear = cross_product.abs() < tolerance;
+
+                // Are tangents also linear?
+                let is_linear_prev = self.points[i].outgoing.is_none() || (self.points[i].outgoing.unwrap().1 - 1.0 / 3.0).abs() < tolerance;
+                let is_linear_curr_in = self.points[j].incoming.is_none() || (self.points[j].incoming.unwrap().1 - 2.0 / 3.0).abs() < tolerance;
+                let is_linear_curr_out = self.points[j].outgoing.is_none() || (self.points[j].outgoing.unwrap().1 - 1.0 / 3.0).abs() < tolerance;
+                let is_linear_next = self.points[j + 1].incoming.is_none() || (self.points[j + 1].incoming.unwrap().1 - 2.0 / 3.0).abs() < tolerance;
+
+                if is_collinear && is_linear_prev && is_linear_curr_in && is_linear_curr_out && is_linear_next {
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+            new_points.push(self.points[j].clone());
+            i = j;
+        }
+
+        // Adjust handles for merged segments
+        for k in 0..new_points.len() - 1 {
+            if new_points[k].outgoing.is_none() {
+                new_points[k].outgoing = Some((1.0 / 3.0, 1.0 / 3.0));
+            }
+            if new_points[k+1].incoming.is_none() {
+                new_points[k+1].incoming = Some((2.0 / 3.0, 2.0 / 3.0));
+            }
+        }
+
+        self.points = new_points;
+    }
 }
 
 fn cubic_bezier(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {

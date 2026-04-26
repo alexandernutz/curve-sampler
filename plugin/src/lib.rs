@@ -86,7 +86,7 @@ impl Plugin for CurveExtractor {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.0";
+    const VERSION: &'static str = "0.1.1777204830";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -115,6 +115,7 @@ impl Plugin for CurveExtractor {
         log_to_file("CurveExtractor::editor() called");
         let trigger = self.trigger_capture.clone();
         let captured = self.captured_string.clone();
+        let params = self.params.clone();
         
         create_egui_editor(
             self.params.editor_state.clone(),
@@ -122,23 +123,54 @@ impl Plugin for CurveExtractor {
             |_ctx, _user_state| {
                 log_to_file("egui init closure");
             },
-            move |egui_ctx, _setter, _user_state| {
-                log_to_file("UI rendering frame");
+            move |egui_ctx, setter, _user_state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
-                    ui.heading("Curve Extractor");
+                    ui.horizontal(|ui| {
+                        ui.heading("Curve Extractor");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(format!("v{}", Self::VERSION));
+                        });
+                    });
                     ui.add_space(10.0);
-                    
-                    if ui.button("Capture Single Cycle").clicked() {
-                        trigger.store(true, Ordering::SeqCst);
-                        log_to_file("Capture button clicked");
-                    }
-                    
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Capture Single Cycle").clicked() {
+                            trigger.store(true, Ordering::SeqCst);
+                            log_to_file("Capture button clicked");
+                        }
+
+                        ui.add_space(20.0);
+                        
+                        // Handle the EnumParam correctly
+                        let mut current_domain = params.domain.value();
+                        ui.label("Format:");
+                        let r1 = ui.radio_value(&mut current_domain, CurveDomain::Geometry, "Geo");
+                        let r2 = ui.radio_value(&mut current_domain, CurveDomain::Spectrum, "Spec");
+                        
+                        if r1.changed() || r2.changed() {
+                            setter.begin_set_parameter(&params.domain);
+                            setter.set_parameter(&params.domain, current_domain);
+                            setter.end_set_parameter(&params.domain);
+                        }
+                    });
+
                     ui.add_space(10.0);
-                    ui.label("Clipboard Format:");
-                    
+                    ui.label("Zebra 3 Clipboard String:");
+
                     if let Some(mut text) = captured.try_lock() {
-                        ui.text_edit_multiline(&mut *text);
-                        if ui.button("Copy to Clipboard").clicked() {
+                        egui::ScrollArea::vertical()
+                            .id_salt("log_scroll")
+                            .max_height(150.0)
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut *text)
+                                        .font(egui::TextStyle::Monospace)
+                                        .desired_width(f32::INFINITY)
+                                );
+                            });
+
+                        ui.add_space(10.0);
+                        if ui.button("📋 Copy to Clipboard").clicked() {
                             egui_ctx.copy_text(text.clone());
                         }
                     } else {
@@ -220,10 +252,24 @@ impl CurveExtractor {
             let offset = t * period_samples;
             let pos = (start_pos + offset) % BUFFER_SIZE as f32;
             let sample = self.get_cubic_sample_at(pos);
-            cycle.push(sample * 0.5 + 0.5);
+            cycle.push(sample);
         }
 
-        let curve = fit_bezier(&cycle, 20, 1, "Peaks And Valleys");
+        // Peak normalization
+        let mut min = f32::INFINITY;
+        let mut max = f32::NEG_INFINITY;
+        for &s in &cycle {
+            if s < min { min = s; }
+            if s > max { max = s; }
+        }
+        let range = (max - min).max(1e-6);
+        for s in &mut cycle {
+            // Map [min, max] to [0.0, 1.0]
+            *s = (*s - min) / range;
+        }
+
+        let mut curve = fit_bezier(&cycle, 20, 1, "Peaks And Valleys");
+        curve.simplify(0.005);
         
         if let Some(mut captured) = self.captured_string.try_lock() {
             match self.params.domain.value() {
@@ -231,10 +277,11 @@ impl CurveExtractor {
                     *captured = zebra_format::generate(&curve);
                 }
                 CurveDomain::Spectrum => {
-                    let spec_curve = curve_core::transform::geometry_to_spectrum(&curve, 2048)
+                    let spec_curve = curve_core::transform::geometry_to_spectrum_steps(&curve, 2048)
                         .unwrap_or(curve);
                     *captured = zebra_format::generate(&spec_curve);
                 }
+
             }
         }
     }

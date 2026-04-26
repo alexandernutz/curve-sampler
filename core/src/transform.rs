@@ -158,7 +158,12 @@ fn log_dense(normalized: &[f32]) -> Vec<f32> {
 }
 
 fn step_cp(x: f32, y: f32) -> crate::bezier::ControlPoint {
-    crate::bezier::ControlPoint { position: (x, y), incoming: None, outgoing: None }
+    crate::bezier::ControlPoint { 
+        position: (x, y), 
+        // 0.33 and 0.66 with 0.33/0.66 Y-values creates a perfectly linear segment in Zebra3's fractional format
+        incoming: Some((2.0 / 3.0, 2.0 / 3.0)), 
+        outgoing: Some((1.0 / 3.0, 1.0 / 3.0)) 
+    }
 }
 
 /// Frequency domain → time domain (zero-phase reconstruction).

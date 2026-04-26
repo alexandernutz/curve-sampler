@@ -22,7 +22,7 @@ fn log_to_file(msg: &str) {
     }
 }
 
-#[derive(Enum, PartialEq, Clone, Copy)]
+#[derive(Enum, PartialEq, Clone, Copy, Debug)]
 pub enum CurveDomain {
     Geometry,
     Spectrum,
@@ -77,7 +77,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 550),
+            editor_state: EguiState::from_size(700, 600),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
         }
     }
@@ -88,7 +88,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.7";
+    const VERSION: &'static str = "0.1.8";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -158,63 +158,45 @@ impl Plugin for CurveSampler {
                     }
                 }
 
-                // 2. Stable Waveform Analysis
+                // 2. Waveform Analysis
                 let mut preview_cycle = Vec::new();
                 let mut current_mags = Vec::new();
                 let mut period = 100.0;
+                let mut center = 0.0f32;
+                let mut range = 1.0f32;
                 
-                // --- Step A: Snapshot a chunk of the buffer to avoid tearing ---
                 let mut snapshot = vec![0.0f32; 8192];
-                let mut local_w_idx = 0;
                 if let Some(buffer) = audio_buffer_mutex.try_lock() {
-                    local_w_idx = write_idx_atomic.load(Ordering::Relaxed);
-                    // Copy the last 8192 samples
-                    for i in 0..8192 {
-                        snapshot[8191 - i] = buffer[(local_w_idx + BUFFER_SIZE - 1 - i) % BUFFER_SIZE];
-                    }
+                    let w_idx = write_idx_atomic.load(Ordering::Relaxed);
+                    for i in 0..8192 { snapshot[8191 - i] = buffer[(w_idx + BUFFER_SIZE - 1 - i) % BUFFER_SIZE]; }
                 }
                 
-                // Snapshot now contains data where index 8191 is the newest sample.
                 let snap_len = snapshot.len();
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
                 let midi_freq = f32::from_bits(current_freq_atomic.load(Ordering::Relaxed));
                 let midi_period = sample_rate / midi_freq;
 
-                // --- Step B: LPF Filtered analysis for stable triggering ---
                 let mut filtered = vec![0.0f32; snap_len];
                 let mut lp = 0.0f32;
-                for i in 0..snap_len {
-                    lp = lp * 0.8 + snapshot[i] * 0.2;
-                    filtered[i] = lp;
-                }
+                for i in 0..snap_len { lp = lp * 0.8 + snapshot[i] * 0.2; filtered[i] = lp; }
 
-                // --- Step C: Find signal range for auto-thresholding on filtered data ---
                 let analysis_limit = (midi_period * 8.0) as usize;
                 let start_idx = snap_len.saturating_sub(analysis_limit);
-                let mut s_min = 0.0f32;
-                let mut s_max = 0.0f32;
-                for i in start_idx..snap_len {
-                    let val = filtered[i];
-                    if val < s_min { s_min = val; }
-                    if val > s_max { s_max = val; }
-                }
-                let center = (s_min + s_max) * 0.5;
-                let range = (s_max - s_min).max(0.01);
-                let threshold = range * 0.15; // 15% hysteresis
+                let mut s_min = 0.0f32; let mut s_max = 0.0f32;
+                for i in start_idx..snap_len { let val = filtered[i]; if val < s_min { s_min = val; } if val > s_max { s_max = val; } }
+                center = (s_min + s_max) * 0.5;
+                range = (s_max - s_min).max(0.01);
+                let threshold = range * 0.15;
 
-                // --- Step D: Find stable crossings ---
                 let mut crossings = Vec::new();
                 let mut armed = false;
                 for i in (start_idx..snap_len - 1).rev() {
                     let s0 = filtered[i];
                     let s1 = filtered[i + 1];
-                    
                     if s0 < center - threshold { armed = true; }
                     if armed && s0 <= center && s1 > center {
-                        // Fractional crossing in the filtered signal
                         let frac = (center - s0) / (s1 - s0).max(1e-6);
-                        let pos = i as f32 + frac;
-                        crossings.push(pos);
+                        crossings.push(i as f32 + frac);
                         armed = false;
                         if crossings.len() >= 3 { break; }
                     }
@@ -222,46 +204,29 @@ impl Plugin for CurveSampler {
 
                 let mut trigger_pos = (snap_len - 1) as f32;
                 if crossings.len() >= 2 {
-                    let t0 = crossings[0];
-                    let t1 = crossings[1];
-                    let p = t0 - t1;
-                    
-                    // Logic: prefer the measured period, but fallback to MIDI if it's crazy
+                    let p = crossings[0] - crossings[1];
                     if (p - midi_period).abs() < midi_period * 0.4 || (p - midi_period*0.5).abs() < p*0.1 || (p - midi_period*2.0).abs() < p*0.1 {
                         period = p;
-                    } else {
-                        period = midi_period;
-                    }
-                    trigger_pos = t1; // Use the older crossing to ensure we have enough "future" data in the snapshot
-                } else {
-                    period = midi_period;
-                }
+                    } else { period = midi_period; }
+                    trigger_pos = crossings[1];
+                } else { period = midi_period; }
 
-                // Smooth period
-                if let Some(mut ema_p) = ema_period_mutex.try_lock() {
-                    *ema_p = *ema_p * 0.95 + period * 0.05;
-                }
+                if let Some(mut ema_p) = ema_period_mutex.try_lock() { *ema_p = *ema_p * 0.95 + period * 0.05; }
                 period = *ema_period_mutex.lock();
 
-                // --- Step E: Resample Previews from RAW snapshot ---
                 for i in 0..1024 {
                     let t = (i as f32 / 1023.0) * 2.0;
                     let pos = trigger_pos + t * period;
                     let i1 = pos.floor() as usize;
                     let i2 = (i1 + 1).min(snap_len - 1);
                     let frac = pos - i1 as f32;
-                    let s = if i1 < snap_len {
-                        snapshot[i1] * (1.0 - frac) + snapshot[i2] * frac
-                    } else {
-                        0.0
-                    };
+                    let s = if i1 < snap_len { snapshot[i1] * (1.0 - frac) + snapshot[i2] * frac } else { 0.0 };
                     preview_cycle.push(s);
                 }
                 
-                // FFT from RAW snapshot (one cycle)
                 use rustfft::{num_complex::Complex, FftPlanner};
-                let fft_size = 1024;
                 let mut planner = FftPlanner::new();
+                let fft_size = 1024;
                 let fft = planner.plan_fft_forward(fft_size);
                 let mut fft_buf = vec![Complex::default(); fft_size];
                 for i in 0..fft_size {
@@ -270,26 +235,16 @@ impl Plugin for CurveSampler {
                     let i1 = pos.floor() as usize;
                     let i2 = (i1 + 1).min(snap_len - 1);
                     let frac = pos - i1 as f32;
-                    let s = if i1 < snap_len {
-                        snapshot[i1] * (1.0 - frac) + snapshot[i2] * frac
-                    } else {
-                        0.0
-                    };
+                    let s = if i1 < snap_len { snapshot[i1] * (1.0 - frac) + snapshot[i2] * frac } else { 0.0 };
                     fft_buf[i] = Complex { re: s - center, im: 0.0 };
                 }
                 fft.process(&mut fft_buf);
                 current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm()).collect();
 
-                // 3. Smooth spectrum
                 if !current_mags.is_empty() {
                     if let Some(mut ema_mags) = ema_mags_mutex.try_lock() {
-                        if ema_mags.len() != current_mags.len() {
-                            *ema_mags = current_mags;
-                        } else {
-                            for (i, m) in current_mags.iter().enumerate() {
-                                ema_mags[i] = ema_mags[i] * 0.85 + m * 0.15;
-                            }
-                        }
+                        if ema_mags.len() != current_mags.len() { *ema_mags = current_mags; }
+                        else { for (i, m) in current_mags.iter().enumerate() { ema_mags[i] = ema_mags[i] * 0.85 + m * 0.15; } }
                     }
                 }
 
@@ -302,13 +257,13 @@ impl Plugin for CurveSampler {
                     });
                     ui.add_space(10.0);
 
+                    // --- Live Previews ---
                     ui.columns(2, |columns| {
                         columns[0].vertical_centered(|ui| {
-                            ui.label("Oscilloscope (LPF Trigger)");
+                            ui.label("Oscilloscope (Locked)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
-                            
                             if preview_cycle.len() >= 2 {
                                 let pts: Vec<egui::Pos2> = preview_cycle.iter().enumerate().map(|(i, &y)| {
                                     let x = rect.left() + (i as f32 / (preview_cycle.len() - 1) as f32) * rect.width();
@@ -317,13 +272,9 @@ impl Plugin for CurveSampler {
                                 }).collect();
                                 painter.line(pts, (1.2, egui::Color32::YELLOW));
                             }
-                            
                             ui.add_space(5.0);
                             if ui.button("Capture Geo").clicked() {
-                                if let Some(mut d) = current_capture_domain.try_lock() {
-                                    *d = CurveDomain::Geometry;
-                                    trigger.store(true, Ordering::SeqCst);
-                                }
+                                if let Some(mut d) = current_capture_domain.try_lock() { *d = CurveDomain::Geometry; trigger.store(true, Ordering::SeqCst); }
                             }
                         });
 
@@ -332,7 +283,6 @@ impl Plugin for CurveSampler {
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
-                            
                             if let Some(mags) = ema_mags_mutex.try_lock() {
                                 let max_mag = mags[1..128.min(mags.len())].iter().cloned().fold(0.001f32, f32::max);
                                 let log_freq_scale = 10.0;
@@ -347,26 +297,53 @@ impl Plugin for CurveSampler {
                                     painter.rect_filled(egui::Rect::from_min_max(egui::pos2(px_start, py), egui::pos2(px_end, rect.bottom())), 0.0, egui::Color32::from_rgb(0, 180, 255));
                                 }
                             }
-
                             ui.add_space(5.0);
                             if ui.button("Capture Spec").clicked() {
-                                if let Some(mut d) = current_capture_domain.try_lock() {
-                                    *d = CurveDomain::Spectrum;
-                                    trigger.store(true, Ordering::SeqCst);
-                                }
+                                if let Some(mut d) = current_capture_domain.try_lock() { *d = CurveDomain::Spectrum; trigger.store(true, Ordering::SeqCst); }
                             }
                         });
                     });
 
                     ui.add_space(20.0);
                     ui.label("Zebra 3 Clipboard String:");
-                    if let Some(mut text) = captured.try_lock() {
-                        egui::ScrollArea::vertical().id_salt("log_scroll").max_height(120.0).show(ui, |ui| {
-                            ui.add(egui::TextEdit::multiline(&mut *text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+
+                    ui.columns(2, |columns| {
+                        if let Some(mut text) = captured.try_lock() {
+                            egui::ScrollArea::vertical().id_salt("log_scroll").max_height(140.0).show(&mut columns[0], |ui| {
+                                ui.add(egui::TextEdit::multiline(&mut *text).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+                            });
+                            columns[0].add_space(10.0);
+                            if columns[0].button("📋 Copy to Clipboard").clicked() { egui_ctx.copy_text(text.clone()); }
+                        }
+
+                        columns[1].vertical_centered(|ui| {
+                            ui.label("Stored Curve Preview");
+                            let rect = ui.allocate_space(egui::vec2(ui.available_width(), 140.0)).1;
+                            let painter = ui.painter_at(rect);
+                            painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
+
+                            if let Some(text) = captured.try_lock() {
+                                if let Ok(curve) = curve_core::zebra_format::parse(&text) {
+                                    let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
+                                    let mut last_pos: Option<egui::Pos2> = None;
+                                    for i in 0..=200 {
+                                        let t = i as f32 / 200.0;
+                                        let y = curve.eval(t);
+                                        let px = rect.left() + t * rect.width();
+                                        let py = rect.bottom() - y * rect.height();
+                                        let pos = egui::pos2(px, py);
+                                        if let Some(prev) = last_pos {
+                                            let color = if is_spec { egui::Color32::from_rgb(0, 180, 255) } else { egui::Color32::YELLOW };
+                                            painter.line_segment([prev, pos], (1.2, color));
+                                        }
+                                        last_pos = Some(pos);
+                                    }
+                                } else {
+                                    painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
+                                }
+                            }
                         });
-                        ui.add_space(10.0);
-                        if ui.button("📋 Copy to Clipboard").clicked() { egui_ctx.copy_text(text.clone()); }
-                    }
+                    });
                 });
                 egui_ctx.request_repaint();
             },
@@ -415,13 +392,10 @@ impl CurveSampler {
     fn perform_extraction(&self, sample_rate: f32, audio_buf: &[f32], write_idx: usize) {
         let freq = f32::from_bits(self.current_freq.load(Ordering::Relaxed));
         let period_samples = sample_rate / freq;
-        if period_samples < 2.0 || period_samples > (BUFFER_SIZE / 4) as f32 {
-            return;
-        }
+        if period_samples < 2.0 || period_samples > (BUFFER_SIZE / 4) as f32 { return; }
 
         let mut cycle = Vec::with_capacity(1024);
         let start_pos = (write_idx as f32 + BUFFER_SIZE as f32 - period_samples) % BUFFER_SIZE as f32;
-        
         for i in 0..1024 {
             let t = i as f32 / 1024.0;
             let offset = t * period_samples;
@@ -430,16 +404,10 @@ impl CurveSampler {
             cycle.push(sample);
         }
 
-        let mut min = f32::INFINITY;
-        let mut max = f32::NEG_INFINITY;
-        for &s in &cycle {
-            if s < min { min = s; }
-            if s > max { max = s; }
-        }
+        let mut min = f32::INFINITY; let mut max = f32::NEG_INFINITY;
+        for &s in &cycle { if s < min { min = s; } if s > max { max = s; } }
         let range = (max - min).max(1e-6);
-        for s in &mut cycle {
-            *s = (*s - min) / range;
-        }
+        for s in &mut cycle { *s = (*s - min) / range; }
 
         if let Some(mut raw_data) = self.raw_cycle.try_lock() {
             *raw_data = cycle;
@@ -453,10 +421,7 @@ impl CurveSampler {
         let i2 = (i1 + 1) % BUFFER_SIZE;
         let i3 = (i1 + 2) % BUFFER_SIZE;
         let t = pos - i1 as f32;
-        let y0 = audio_buf[i0];
-        let y1 = audio_buf[i1];
-        let y2 = audio_buf[i2];
-        let y3 = audio_buf[i3];
+        let y0 = audio_buf[i0]; let y1 = audio_buf[i1]; let y2 = audio_buf[i2]; let y3 = audio_buf[i3];
         let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
         let b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
         let c = -0.5 * y0 + 0.5 * y2;

@@ -75,6 +75,7 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
 /// the rest are set to zero. This avoids the octave-band artifact where all harmonics
 /// in one octave (e.g. 4, 5, 6, 7) would incorrectly share the same amplitude.
 pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Result<BezierCurve, String> {
+    let fft_size = fft_size.max(2048); // Ensure enough resolution for 1024 harmonics
     let samples = curve.sample(fft_size);
     let mut buf: Vec<Complex<f32>> = samples
         .iter()
@@ -83,24 +84,23 @@ pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Resul
     FftPlanner::new().plan_fft_forward(fft_size).process(&mut buf);
 
     let num_harmonics = fft_size / 2;
+    // Scaling: norm / fft_size * 2.0 (for real FFT) * 2.0 (to map 0.5 center amplitude to 1.0 magnitude)
     let magnitudes: Vec<f32> = buf[..num_harmonics]
         .iter()
-        .map(|c| c.norm() / fft_size as f32)
+        .map(|c| c.norm() * 4.0 / fft_size as f32)
         .collect();
-    let max = magnitudes[1..].iter().cloned().fold(0.0f32, f32::max);
-    let normalized: Vec<f32> = if max > 0.0 {
-        magnitudes.iter().map(|&m| m / max).collect()
-    } else {
-        magnitudes
-    };
+    
+    // We don't normalize to 'max' anymore, as our input is already 0..1 peak-normalized 
+    // and we want absolute matching with Zebra3 levels.
+    let normalized = magnitudes;
 
     // Per-harmonic steps. Cap at MAX_STEP_HARMONICS; only go as far as the last harmonic
     // above STEP_FLOOR.
-    const MAX_STEP_HARMONICS: usize = 128;
+    const MAX_STEP_HARMONICS: usize = 1024;
     const STEP_FLOOR: f32 = 0.002;
     // Adjacent steps are merged when their amplitudes differ by less than SIMPLIFY_TOL,
     // removing redundant double-points (e.g. long runs of near-zero harmonics).
-    const SIMPLIFY_TOL: f32 = 0.01;
+    const SIMPLIFY_TOL: f32 = 0.001; // Reduced from 0.01
 
     let highest = (1..num_harmonics.min(MAX_STEP_HARMONICS + 1))
         .rev()
@@ -110,21 +110,19 @@ pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Resul
     let amp = |k: usize| normalized.get(k).copied().unwrap_or(0.0);
     let xpos = |k: usize| (k as f32).log2() / LOG_FREQ_SCALE;
 
-    // Build a simplified step list: (x_start, amplitude).
-    // A new entry is emitted only when the amplitude changes by more than SIMPLIFY_TOL
-    // relative to the most recently emitted step. This merges long runs of equal-amplitude
-    // harmonics (e.g. all-zero regions) into a single step.
+    // Build a step list. We MUST emit points for every harmonic that differs from 
+    // its PREVIOUS neighbor to ensure narrow spikes (single-bin) are preserved.
     let mut steps: Vec<(f32, f32)> = vec![(0.0, amp(1))];
-    let mut current_level = amp(1);
     for k in 2..=highest {
         let a = amp(k);
-        if (a - current_level).abs() > SIMPLIFY_TOL {
+        let prev_a = amp(k-1);
+        if (a - prev_a).abs() > SIMPLIFY_TOL {
             steps.push((xpos(k), a));
-            current_level = a;
         }
     }
-    // Terminate with a zero step if the tail is non-zero.
-    if current_level > SIMPLIFY_TOL {
+    // Terminate with a zero step if the last step was high.
+    let last_level = steps.last().map(|s| s.1).unwrap_or(0.0);
+    if last_level > SIMPLIFY_TOL {
         let x_tail = xpos(highest + 1).min(1.0);
         steps.push((x_tail, 0.0));
     }
@@ -166,9 +164,76 @@ fn step_cp(x: f32, y: f32) -> crate::bezier::ControlPoint {
     }
 }
 
-/// Frequency domain → time domain (zero-phase reconstruction).
-///
-/// 1. Sample curve as harmonic amplitudes
+/// Directly convert raw audio samples (one cycle) to a stepped spectral BezierCurve.
+/// This bypasses the intermediate Geometry-fitting stage to preserve high-frequency fidelity.
+pub fn samples_to_spectrum_steps(
+    samples: &[f32], 
+    curve_id: u32, 
+    morph_type: &str
+) -> Result<BezierCurve, String> {
+    let n = samples.len();
+    let fft_size = n.next_power_of_two().max(2048);
+    
+    let mut buf: Vec<Complex<f32>> = samples
+        .iter()
+        .map(|&y| Complex { re: y - 0.5, im: 0.0 })
+        .collect();
+    
+    // Zero-pad to fft_size
+    buf.resize(fft_size, Complex::default());
+    FftPlanner::new().plan_fft_forward(fft_size).process(&mut buf);
+
+    let num_harmonics = fft_size / 2;
+    // Scaling to match Zebra3 (0.5 amplitude -> 1.0 magnitude)
+    let magnitudes: Vec<f32> = buf[..num_harmonics]
+        .iter()
+        .map(|c| c.norm() * 4.0 / n as f32) // Use raw sample count 'n' for scaling
+        .collect();
+
+    let normalized = magnitudes;
+
+    const MAX_STEP_HARMONICS: usize = 1024;
+    const STEP_FLOOR: f32 = 0.001;
+    const SIMPLIFY_TOL: f32 = 0.001;
+
+    let highest = (1..num_harmonics.min(MAX_STEP_HARMONICS + 1))
+        .rev()
+        .find(|&k| normalized.get(k).copied().unwrap_or(0.0) > STEP_FLOOR)
+        .unwrap_or(1);
+
+    let amp = |k: usize| normalized.get(k).copied().unwrap_or(0.0);
+    let xpos = |k: usize| (k as f32).log2() / LOG_FREQ_SCALE;
+
+    let mut steps: Vec<(f32, f32)> = vec![(0.0, amp(1))];
+    for k in 2..=highest {
+        let a = amp(k);
+        let prev_a = amp(k-1);
+        if (a - prev_a).abs() > SIMPLIFY_TOL {
+            steps.push((xpos(k), a));
+        }
+    }
+    
+    let last_level = steps.last().map(|s| s.1).unwrap_or(0.0);
+    if last_level > SIMPLIFY_TOL {
+        let x_tail = xpos(highest + 1).min(1.0);
+        steps.push((x_tail, 0.0));
+    }
+
+    let mut points = vec![step_cp(steps[0].0, steps[0].1)];
+    for i in 1..steps.len() {
+        let (x, a) = steps[i];
+        let prev_a = steps[i - 1].1;
+        points.push(step_cp(x, prev_a));
+        points.push(step_cp(x, a));
+    }
+    points.push(step_cp(1.0, steps.last().map(|s| s.1).unwrap_or(0.0)));
+
+    Ok(BezierCurve { 
+        points, 
+        curve_id, 
+        morph_type: morph_type.to_string() 
+    })
+}
 /// 2. Build a real-valued spectrum with zero phase
 /// 3. IFFT
 /// 4. Normalize to [0, 1]

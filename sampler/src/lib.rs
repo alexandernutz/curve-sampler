@@ -53,6 +53,9 @@ struct CurveSamplerParams {
 
     #[id = "domain"]
     pub domain: EnumParam<CurveDomain>,
+    
+    #[id = "norm"]
+    pub normalize_capture: BoolParam,
 }
 
 impl Default for CurveSampler {
@@ -69,7 +72,7 @@ impl Default for CurveSampler {
             capture_ready: Arc::new(AtomicBool::new(false)),
             current_capture_domain: Arc::new(Mutex::new(CurveDomain::Geometry)),
             ema_period: Arc::new(Mutex::new(100.0)),
-            ema_magnitudes: Arc::new(Mutex::new(vec![0.0; 256])),
+            ema_magnitudes: Arc::new(Mutex::new(vec![0.0; 1024])),
         }
     }
 }
@@ -79,6 +82,7 @@ impl Default for CurveSamplerParams {
         Self {
             editor_state: EguiState::from_size(700, 600),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
+            normalize_capture: BoolParam::new("Normalize", true),
         }
     }
 }
@@ -88,7 +92,8 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.8";
+    const VERSION: &'static str = "0.1.14";
+
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -119,6 +124,7 @@ impl Plugin for CurveSampler {
         let raw_cycle = self.raw_cycle.clone();
         let capture_ready = self.capture_ready.clone();
         let current_capture_domain = self.current_capture_domain.clone();
+        let params = self.params.clone();
         
         let audio_buffer_mutex = self.audio_buffer.clone();
         let write_idx_atomic = self.write_idx.clone();
@@ -132,25 +138,35 @@ impl Plugin for CurveSampler {
             self.params.editor_state.clone(),
             (),
             |_ctx, _user_state| {},
-            move |egui_ctx, _setter, _user_state| {
+            move |egui_ctx, setter, _user_state| {
                 // 1. Process new captures
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
-                            let mut curve = fit_bezier(&raw_data, 20, 1, "Peaks And Valleys");
-                            curve.simplify(0.005);
-                            
+                            let mut curve = match *domain {
+                                CurveDomain::Geometry => {
+                                    // Use interpolation for geometry to preserve sharp edges/jagged details
+                                    let mut c = curve_core::bezier::fit_bezier_interp(&raw_data, 64, 1, "Peaks And Valleys");
+                                    c.simplify(0.002);
+                                    c
+                                }
+                                CurveDomain::Spectrum => {
+                                    // Use direct-from-samples spectrum analysis for 100% frequency fidelity
+                                    curve_core::transform::samples_to_spectrum_steps(&raw_data, 1, "Peaks And Valleys").unwrap_or_else(|_| {
+                                        fit_bezier(&raw_data, 20, 1, "Peaks And Valleys")
+                                    })
+                                }
+                            };
+
                             if let Some(mut text) = captured.try_lock() {
-                                match *domain {
-                                    CurveDomain::Geometry => {
-                                        *text = zebra_format::generate(&curve);
-                                    }
-                                    CurveDomain::Spectrum => {
-                                        let spec_curve = curve_core::transform::geometry_to_spectrum_steps(&curve, 2048)
-                                            .unwrap_or(curve);
-                                        *text = zebra_format::generate(&spec_curve);
+                                // Optional peak normalization for export
+                                if params.normalize_capture.value() {
+                                    let max_y = curve.points.iter().map(|p| p.position.1).fold(0.0f32, f32::max);
+                                    if max_y > 0.001 {
+                                        for p in &mut curve.points { p.position.1 /= max_y; }
                                     }
                                 }
+                                *text = zebra_format::generate(&curve);
                             }
                             raw_data.clear();
                             capture_ready.store(false, Ordering::SeqCst);
@@ -158,7 +174,6 @@ impl Plugin for CurveSampler {
                     }
                 }
 
-                // 2. Waveform Analysis
                 let mut preview_cycle = Vec::new();
                 let mut current_mags = Vec::new();
                 let mut period = 100.0;
@@ -226,7 +241,7 @@ impl Plugin for CurveSampler {
                 
                 use rustfft::{num_complex::Complex, FftPlanner};
                 let mut planner = FftPlanner::new();
-                let fft_size = 1024;
+                let fft_size = 2048;
                 let fft = planner.plan_fft_forward(fft_size);
                 let mut fft_buf = vec![Complex::default(); fft_size];
                 for i in 0..fft_size {
@@ -239,7 +254,7 @@ impl Plugin for CurveSampler {
                     fft_buf[i] = Complex { re: s - center, im: 0.0 };
                 }
                 fft.process(&mut fft_buf);
-                current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm()).collect();
+                current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 4.0 / fft_size as f32).collect();
 
                 if !current_mags.is_empty() {
                     if let Some(mut ema_mags) = ema_mags_mutex.try_lock() {
@@ -284,9 +299,10 @@ impl Plugin for CurveSampler {
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
                             if let Some(mags) = ema_mags_mutex.try_lock() {
-                                let max_mag = mags[1..128.min(mags.len())].iter().cloned().fold(0.001f32, f32::max);
+                                // For preview, we always normalize to max for visibility
+                                let max_mag = mags[1..].iter().cloned().fold(0.001f32, f32::max);
                                 let log_freq_scale = 10.0;
-                                for k in 1..128 {
+                                for k in 1..1024.min(mags.len()) {
                                     let mag = (mags.get(k).copied().unwrap_or(0.0) / max_mag).min(1.0);
                                     if mag < 0.001 { continue; }
                                     let x_start = (k as f32).log2() / log_freq_scale;
@@ -298,9 +314,18 @@ impl Plugin for CurveSampler {
                                 }
                             }
                             ui.add_space(5.0);
-                            if ui.button("Capture Spec").clicked() {
-                                if let Some(mut d) = current_capture_domain.try_lock() { *d = CurveDomain::Spectrum; trigger.store(true, Ordering::SeqCst); }
-                            }
+                            ui.horizontal(|ui| {
+                                if ui.button("Capture Spec").clicked() {
+                                    if let Some(mut d) = current_capture_domain.try_lock() { *d = CurveDomain::Spectrum; trigger.store(true, Ordering::SeqCst); }
+                                }
+                                ui.add_space(10.0);
+                                let mut norm = params.normalize_capture.value();
+                                if ui.checkbox(&mut norm, "Normalize").clicked() {
+                                    setter.begin_set_parameter(&params.normalize_capture);
+                                    setter.set_parameter(&params.normalize_capture, norm);
+                                    setter.end_set_parameter(&params.normalize_capture);
+                                }
+                            });
                         });
                     });
 
@@ -326,8 +351,9 @@ impl Plugin for CurveSampler {
                                 if let Ok(curve) = curve_core::zebra_format::parse(&text) {
                                     let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
                                     let mut last_pos: Option<egui::Pos2> = None;
-                                    for i in 0..=200 {
-                                        let t = i as f32 / 200.0;
+                                    let preview_steps = 512; // Increased from 200 for better spike visibility
+                                    for i in 0..=preview_steps {
+                                        let t = i as f32 / preview_steps as f32;
                                         let y = curve.eval(t);
                                         let px = rect.left() + t * rect.width();
                                         let py = rect.bottom() - y * rect.height();
@@ -358,17 +384,14 @@ impl Plugin for CurveSampler {
     ) -> ProcessStatus {
         let sample_rate = context.transport().sample_rate;
         self.sample_rate.store(sample_rate.to_bits(), Ordering::Relaxed);
-        
         while let Some(event) = context.next_event() {
             if let NoteEvent::NoteOn { note, .. } = event {
                 let freq = 440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0);
                 self.current_freq.store(freq.to_bits(), Ordering::Relaxed);
             }
         }
-
         let mut trigger = self.trigger_capture.load(Ordering::SeqCst);
         let mut w_idx = self.write_idx.load(Ordering::Relaxed);
-        
         if let Some(mut audio_buf) = self.audio_buffer.try_lock() {
             for mut samples in buffer.iter_samples() {
                 let sample = *samples.iter_mut().next().unwrap_or(&mut 0.0);

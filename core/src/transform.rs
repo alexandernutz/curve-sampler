@@ -174,20 +174,31 @@ pub fn samples_to_spectrum_steps(
     let n = samples.len();
     let fft_size = n.next_power_of_two().max(2048);
     
+    // 1. Calculate actual mean to remove DC offset artifacts
+    let mean = samples.iter().sum::<f32>() / n as f32;
+    
     let mut buf: Vec<Complex<f32>> = samples
         .iter()
-        .map(|&y| Complex { re: y - 0.5, im: 0.0 })
+        .enumerate()
+        .map(|(i, &y)| {
+            // 2. Subtract mean and apply Hann window to reduce leakage
+            let window = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (n - 1) as f32).cos());
+            Complex { re: (y - mean) * window, im: 0.0 }
+        })
         .collect();
     
-    // Zero-pad to fft_size
     buf.resize(fft_size, Complex::default());
     FftPlanner::new().plan_fft_forward(fft_size).process(&mut buf);
 
     let num_harmonics = fft_size / 2;
-    // Scaling to match Zebra3 (0.5 amplitude -> 1.0 magnitude)
+    // 3. Scaling:
+    // norm * 2 / n (Real FFT compensation) 
+    // * 2 (Hann window compensation)
+    // * 2 (Zebra 0.5 amplitude -> 1.0 magnitude)
+    // Total = 8 / n
     let magnitudes: Vec<f32> = buf[..num_harmonics]
         .iter()
-        .map(|c| c.norm() * 4.0 / n as f32) // Use raw sample count 'n' for scaling
+        .map(|c| c.norm() * 8.0 / n as f32)
         .collect();
 
     let normalized = magnitudes;

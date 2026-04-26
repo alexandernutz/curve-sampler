@@ -22,8 +22,8 @@ fn log_to_file(msg: &str) {
     }
 }
 
-struct CurveExtractor {
-    params: Arc<CurveExtractorParams>,
+struct CurveSampler {
+    params: Arc<CurveSamplerParams>,
     audio_buffer: Vec<f32>,
     write_idx: usize,
     current_freq: f32,
@@ -32,7 +32,7 @@ struct CurveExtractor {
 }
 
 #[derive(Params)]
-struct CurveExtractorParams {
+struct CurveSamplerParams {
     pub editor_state: Arc<EguiState>,
 
     #[id = "domain"]
@@ -45,9 +45,9 @@ pub enum CurveDomain {
     Spectrum,
 }
 
-impl Default for CurveExtractor {
+impl Default for CurveSampler {
     fn default() -> Self {
-        log_to_file("CurveExtractor::default()");
+        log_to_file("CurveSampler::default()");
         
         std::panic::set_hook(Box::new(|info| {
             let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
@@ -62,7 +62,7 @@ impl Default for CurveExtractor {
         }));
 
         Self {
-            params: Arc::new(CurveExtractorParams::default()),
+            params: Arc::new(CurveSamplerParams::default()),
             audio_buffer: vec![0.0; BUFFER_SIZE],
             write_idx: 0,
             current_freq: 440.0,
@@ -72,7 +72,7 @@ impl Default for CurveExtractor {
     }
 }
 
-impl Default for CurveExtractorParams {
+impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
             editor_state: EguiState::from_size(400, 300),
@@ -81,12 +81,12 @@ impl Default for CurveExtractorParams {
     }
 }
 
-impl Plugin for CurveExtractor {
-    const NAME: &'static str = "Curve Extractor";
+impl Plugin for CurveSampler {
+    const NAME: &'static str = "Curve Sampler";
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.1777204830";
+    const VERSION: &'static str = "0.1.1777210836";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -112,7 +112,7 @@ impl Plugin for CurveExtractor {
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        log_to_file("CurveExtractor::editor() called");
+        log_to_file("CurveSampler::editor() called");
         let trigger = self.trigger_capture.clone();
         let captured = self.captured_string.clone();
         let params = self.params.clone();
@@ -126,7 +126,7 @@ impl Plugin for CurveExtractor {
             move |egui_ctx, setter, _user_state| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.horizontal(|ui| {
-                        ui.heading("Curve Extractor");
+                        ui.heading("Curve Sampler");
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(format!("v{}", Self::VERSION));
                         });
@@ -219,21 +219,21 @@ impl Plugin for CurveExtractor {
     }
 }
 
-impl ClapPlugin for CurveExtractor {
-    const CLAP_ID: &'static str = "com.alexandernutz.curve-extractor";
+impl ClapPlugin for CurveSampler {
+    const CLAP_ID: &'static str = "com.alexandernutz.curve-sampler";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Extract curves from audio");
     const CLAP_MANUAL_URL: Option<&'static str> = None;
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Utility];
 }
 
-impl Vst3Plugin for CurveExtractor {
-    const VST3_CLASS_ID: [u8; 16] = *b"CurveExtractor01";
+impl Vst3Plugin for CurveSampler {
+    const VST3_CLASS_ID: [u8; 16] = *b"CurveSampler0001";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
-impl CurveExtractor {
+impl CurveSampler {
     fn perform_extraction(&self, sample_rate: f32) {
         let period_samples = sample_rate / self.current_freq;
         if period_samples < 2.0 || period_samples > (BUFFER_SIZE / 2) as f32 {
@@ -308,5 +308,5 @@ impl CurveExtractor {
     }
 }
 
-nih_export_clap!(CurveExtractor);
-nih_export_vst3!(CurveExtractor);
+nih_export_clap!(CurveSampler);
+nih_export_vst3!(CurveSampler);

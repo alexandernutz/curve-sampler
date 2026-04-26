@@ -1051,17 +1051,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "curve-extractor"
-version = "0.1.0"
-dependencies = [
- "curve-core",
- "log",
- "nih_plug",
- "nih_plug_egui",
- "parking_lot",
-]
-
-[[package]]
 name = "curve-jumbler"
 version = "0.1.0"
 dependencies = [
@@ -1076,6 +1065,17 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "curve-sampler"
+version = "0.1.0"
+dependencies = [
+ "curve-core",
+ "log",
+ "nih_plug",
+ "nih_plug_egui",
+ "parking_lot",
 ]
 
 [[package]]

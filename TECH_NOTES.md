@@ -7,54 +7,45 @@ This document outlines the technical architecture and DSP techniques implemented
 The plugin follows a strict decoupling between the **Real-time Audio Thread** and the **UI Thread** to ensure DAW stability and responsive visualizations.
 
 - **Shared State:** All shared data is wrapped in `Arc` (Atomic Reference Counting).
-- **Safe Mutexes:** Using `parking_lot::Mutex` for efficient, non-poisoning locking of the audio ring buffer and the captured Bézier curves.
-- **Lockless Hints:** Pitch (`current_freq`), Sample Rate, and Buffer Write Index are shared via `AtomicU32` and `AtomicUsize` for zero-latency communication from Audio to UI.
-- **Decoupled Computation:** The computationally expensive Bézier least-squares fitting (`fit_bezier`) and Zebra 3 string generation are offloaded entirely to the UI thread. The audio thread only performs raw sample capture and signaling.
+- **Safe Mutexes:** Using `parking_lot::Mutex` for efficient, non-poisoning locking.
+- **UI/Audio Decoupling:** Heavy computations (Bézier fitting, FFT analysis, and Zebra 3 string generation) are offloaded entirely to the UI thread. The audio thread only performs raw sample capture and signaling.
 
-## 2. Visualization Stabilization Techniques
+## 2. Visualization & Analysis Stabilization
 
-Achieving a "locked" oscilloscope and stationary spectrum analyzer required several layers of signal processing.
+### A. Buffer Snapshotting (Anti-Tearing)
+Every UI frame, the plugin takes a static "snapshot" of the audio ring buffer while holding a mutex. Analysis and rendering are performed on this snapshot, ensuring visual consistency and preventing "wave tearing" where the display jumps mid-draw.
 
-### A. Anti-Tearing (Buffer Snapshotting)
-To prevent "jumps" caused by the audio thread updating the ring buffer while the UI thread is reading it, we implement a **Snapshotting** strategy:
-- Every UI frame, the UI thread holds the mutex just long enough to copy the most recent 8192 samples into a local `snapshot` vector.
-- All subsequent analysis (LPF, crossing detection, FFT) and rendering are performed on this static snapshot, ensuring visual consistency within a single frame.
+### B. Precision Period Locking
+Instead of relying solely on MIDI pitch, we perform **Measured Period Detection**:
+- **Adaptive Auto-Center:** We calculate the local min/max to find the true "zero line," handling signals with DC offset.
+- **Multi-Crossing Averaging:** We find the last 4 rising crossings and average the distance between them to find the true fundamental frequency of the audio.
+- **Sub-sample Interpolation:** We find the exact fractional crossing point using linear interpolation.
 
-### B. LPF-Based Triggering (Fundamental Locking)
-To prevent high-frequency harmonics from causing the trigger to jump between multiple points in a cycle:
-- A simple **1-pole Low-Pass Filter** (EMA filter) is applied to the snapshot specifically for analysis.
-- The trigger search (zero-crossing) runs on this filtered signal, effectively locking onto the fundamental frequency while ignoring the "wiggles" of harmonics.
+### C. High-Order Cubic Resampling
+For both the Oscilloscope and the FFT data extraction, we use a **4-point Catmull-Rom Cubic Sampler**. In the UI thread, this is "Hardened" with strict bounds clamping to prevent memory access panics.
 
-### C. Adaptive Auto-Centering & Hysteresis
-- The plugin calculates the local min/max of the snapshot every frame to find the true "center line."
-- A **Schmidt Trigger** logic with 15% hysteresis is used: the trigger only "arms" when the signal drops significantly below center and only "fires" on a rising edge crossing. This eliminates jitter from low-level noise.
+## 3. The "Spectral Round Trip" Experiment
 
-### D. Sub-sample Accurate Phase Correction
-- The exact crossing point is calculated using **Linear Interpolation** between the two samples surrounding the zero-crossing.
-- This fractional offset is used when resampling the waveform for display, ensuring the wave stays perfectly still at a sub-pixel level.
+We conducted a "Round Trip" fidelity test:
+1. **Zebra 3 Source:** Created a curve with 3 sharp spikes (partials 1, 5, and 7) at 100% amplitude.
+2. **Capture:** Sampled the resulting audio in Curve Sampler using the **Direct-to-Spectrum** path.
+3. **Pasting:** Pasted the resulting curve back into Zebra 3.
 
-### E. Time-Base Smoothing (EMA)
-- The fundamental period ($T$) is measured by calculating the distance between successive crossings.
-- This measured period is validated against the MIDI pitch hint to avoid octave errors.
-- The period used for horizontal scaling is smoothed using an **Exponential Moving Average**, preventing "visual vibration" when the incoming pitch is slightly unstable.
+### Findings & Fidelity Limits:
+- **Spike Preservation:** Higher frequency spikes (like partial 7) are now successfully preserved in the export.
+- **The "Spill" Phenomenon:** Even with Blackman-Harris windowing and phase-locking, the captured curve shows energy leakage ("spill") into bins adjacent to the primary spikes.
+- **Amplitude Scaling:** We implemented an **8.0/N scaling factor** (Real FFT compensation * Window Gain * Zebra convention) to ensure that a full-scale time-domain wave correctly produces a 1.0 magnitude spectral spike.
 
-## 3. Spectral Analysis & Rendering
+### Conclusion on Spectral Recovery:
+The "perfectly zero" bins in Zebra 3's editor are an additive ideal. Recovering them from rendered audio is subject to the **Uncertainty Principle of Signal Analysis**. Any sub-sample phase jitter or slight mismatch between the extracted cycle and the true oscillator period results in spectral smearing. The current implementation uses **Blackman-Harris 4-term windowing** to achieve the best possible sidelobe suppression (-92dB theoretical), which is the current state-of-the-art for this type of recovery.
 
-### A. Period-Locked FFT
-Standard fixed-window FFTs suffer from **Spectral Leakage**, which causes magnitudes to "twitch" and "smear." 
-- We resample exactly **one full period** (as measured by our period detection) into a power-of-two FFT buffer (1024 samples).
-- This aligns every harmonic frequency exactly with an FFT bin center ($k=1, 2, 3...$), resulting in stationary, distinct spectral peaks.
+## 4. Geometry Optimization
 
-### B. Boxy Rendering (Zebra 3 Compatibility)
-- Each harmonic magnitude is rendered as a distinct rectangle ("box").
-- The X-axis uses the Zebra 3 logarithmic scale: $x = \log_2(k) / 10$.
-- This results in the characteristic "wider boxes on the left, thinner on the right" look consistent with the Zebra 3 spectral editor.
-- Points are exported with explicit **Linear Tangents** to preserve the sharp boxy shape when pasted into the synth.
+### Interpolation Fitting
+For the "Capture Geo" path, we switched to **64-segment Interpolation Fitting**. This ensures the Bézier curve passes **exactly** through its knot points, preserving sharp "jagged" edges (like Sawtooths) that are often smoothed out by traditional least-squares fitting.
 
-## 4. Curve Optimization
-
-### Collinear Simplification
-When fitting a Bézier curve to a geometric shape (like a Sawtooth or Square), least-squares fitting often produces redundant segments on the linear parts.
-- We implemented a **Collinear Simplify** pass.
-- It calculates the cross-product of adjacent segments; if the change in slope is below a tolerance (`0.005`), the intermediate control point is removed and the segments are merged.
-- This keeps the final exported SVG/Zebra format string concise and "editable."
+### Collinear Simplify
+To keep the final SVG/Clipboard strings concise:
+- We implement a **Point-to-Line Distance** simplification pass.
+- If a point is within `0.002` units of the straight line between its neighbors, it is pruned.
+- **Linear Tangents:** For merged segments, we force handles to be at 1/3 and 2/3 positions, ensuring perfectly straight lines for geometric shapes.

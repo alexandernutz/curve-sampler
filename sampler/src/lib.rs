@@ -45,6 +45,8 @@ struct CurveSampler {
 
     ema_period: Arc<Mutex<f32>>,
     ema_magnitudes: Arc<Mutex<Vec<f32>>>,
+    
+    fft_planner: Arc<Mutex<rustfft::FftPlanner<f32>>>,
 }
 
 #[derive(Params)]
@@ -87,6 +89,7 @@ impl Default for CurveSampler {
             current_capture_domain: Arc::new(Mutex::new(CurveDomain::Geometry)),
             ema_period: Arc::new(Mutex::new(100.0)),
             ema_magnitudes: Arc::new(Mutex::new(vec![0.0; 1024])),
+            fft_planner: Arc::new(Mutex::new(rustfft::FftPlanner::new())),
         }
     }
 }
@@ -106,7 +109,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.22";
+    const VERSION: &'static str = "0.1.24";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -147,6 +150,7 @@ impl Plugin for CurveSampler {
 
         let ema_period_mutex = self.ema_period.clone();
         let ema_mags_mutex = self.ema_magnitudes.clone();
+        let fft_planner_mutex = self.fft_planner.clone();
 
         create_egui_editor(
             self.params.editor_state.clone(),
@@ -155,7 +159,6 @@ impl Plugin for CurveSampler {
                 log_to_file("egui init closure");
             },
             move |egui_ctx, setter, _user_state| {
-                // Check if a new capture is ready to be processed
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -191,58 +194,111 @@ impl Plugin for CurveSampler {
                 let mut center = 0.0;
                 let mut range = 1.0;
                 
-                // --- Step A: Snapshot (Local stack buffer to be ultra-safe) ---
-                let mut snapshot = vec![0.0f32; 4096]; // Smaller snapshot
+                // --- Step A: Snapshot ---
+                let mut snapshot = vec![0.0f32; 8192];
                 if let Some(buffer) = audio_buffer_mutex.try_lock() {
                     let w_idx = write_idx_atomic.load(Ordering::Relaxed);
-                    for i in 0..4096 { 
-                        snapshot[4095 - i] = buffer[(w_idx + BUFFER_SIZE - 1 - i) % BUFFER_SIZE]; 
-                    }
+                    for i in 0..8192 { snapshot[8191 - i] = buffer[(w_idx + BUFFER_SIZE - 1 - i) % BUFFER_SIZE]; }
                 } else {
-                    // Just fallback to some UI loop to avoid block
-                    egui_ctx.request_repaint();
+                    return; // Avoid blocking UI if audio thread has lock
                 }
                 
                 let snap_len = snapshot.len();
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
                 let midi_freq = f32::from_bits(current_freq_atomic.load(Ordering::Relaxed));
-                let midi_period = (sample_rate / midi_freq).clamp(10.0, 2000.0);
+                let midi_period = (sample_rate / midi_freq).clamp(8.0, 4000.0);
 
-                // Simple Linear Crossing for Preview (Safer)
-                let mut trigger_idx = snap_len - 1;
-                for i in (0..snap_len - 1).rev() {
-                    if snapshot[i] <= 0.0 && snapshot[i+1] > 0.0 {
-                        trigger_idx = i;
-                        break;
+                let mut filtered = vec![0.0f32; snap_len];
+                let mut lp = 0.0f32;
+                for i in 0..snap_len { lp = lp * 0.8 + snapshot[i] * 0.2; filtered[i] = lp; }
+
+                let analysis_limit = (midi_period * 8.0) as usize;
+                let start_idx = snap_len.saturating_sub(analysis_limit);
+                let mut s_min = 0.0f32; let mut s_max = 0.0f32;
+                for i in start_idx..snap_len { let val = filtered[i]; if val < s_min { s_min = val; } if val > s_max { s_max = val; } }
+                center = (s_min + s_max) * 0.5;
+                range = (s_max - s_min).max(0.01);
+                let threshold = range * 0.15;
+
+                let mut crossings = Vec::new();
+                let mut armed = false;
+                for i in (start_idx..snap_len - 1).rev() {
+                    let s0 = filtered[i]; let s1 = filtered[i + 1];
+                    if s0 < center - threshold { armed = true; }
+                    if armed && s0 <= center && s1 > center {
+                        let frac = (center - s0) / (s1 - s0).max(1e-6);
+                        crossings.push(i as f32 + frac);
+                        armed = false;
+                        if crossings.len() >= 3 { break; }
                     }
                 }
-                period = midi_period;
-                let trigger_pos = trigger_idx as f32;
+
+                let mut trigger_pos = (snap_len - 1) as f32;
+                if crossings.len() >= 2 {
+                    let p = crossings[0] - crossings[1];
+                    if (p - midi_period).abs() < midi_period * 0.4 || (p - midi_period*0.5).abs() < p*0.1 || (p - midi_period*2.0).abs() < p*0.1 {
+                        period = p;
+                    } else { period = midi_period; }
+                    trigger_pos = crossings[0] - period; 
+                } else { period = midi_period; }
+
+                if let Some(mut ema_p) = ema_period_mutex.try_lock() { *ema_p = *ema_p * 0.95 + period * 0.05; }
+                period = *ema_period_mutex.lock();
+
+                // ULTRASAFE Cubic Sampler
+                let get_snapshot_cubic = |pos: f32, snap: &[f32]| -> f32 {
+                    let snap_len = snap.len();
+                    if snap_len < 4 { return 0.0; }
+                    let p = pos.clamp(2.0, (snap_len - 3) as f32);
+                    let i1 = p.floor() as usize; 
+                    let i2 = i1 + 1;
+                    let i0 = i1 - 1;
+                    let i3 = i1 + 2;
+                    let t = p - i1 as f32;
+                    let y0 = snap[i0]; let y1 = snap[i1]; let y2 = snap[i2]; let y3 = snap[i3];
+                    let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+                    let b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+                    let c = -0.5 * y0 + 0.5 * y2;
+                    let d = y1;
+                    a * t * t * t + b * t * t + c * t + d
+                };
 
                 for i in 0..1024 {
                     let t = (i as f32 / 1023.0) * 2.0;
-                    let pos = (trigger_pos + t * period) as usize;
-                    let s = snapshot.get(pos % snap_len).copied().unwrap_or(0.0);
-                    preview_cycle.push(s);
+                    let pos = trigger_pos + t * period;
+                    preview_cycle.push(get_snapshot_cubic(pos, &snapshot));
                 }
-
-                // Simple FFT Analysis
-                use rustfft::{num_complex::Complex, FftPlanner};
-                let mut planner = FftPlanner::new();
-                let fft_size = 1024;
-                let fft = planner.plan_fft_forward(fft_size);
-                let mut fft_buf = vec![Complex::default(); fft_size];
-                for i in 0..fft_size {
-                    let s = snapshot.get(i).copied().unwrap_or(0.0);
-                    fft_buf[i] = Complex { re: s, im: 0.0 };
+                
+                if let Some(mut planner) = fft_planner_mutex.try_lock() {
+                    use rustfft::num_complex::Complex;
+                    let fft_size = 2048;
+                    let fft = planner.plan_fft_forward(fft_size);
+                    let mut fft_buf = vec![Complex::default(); fft_size];
+                    let mut sum = 0.0f32;
+                    for i in 0..fft_size {
+                        let t = i as f32 / fft_size as f32;
+                        let pos = trigger_pos + t * period;
+                        sum += get_snapshot_cubic(pos, &snapshot);
+                    }
+                    let mean = sum / fft_size as f32;
+                    for i in 0..fft_size {
+                        let t = i as f32 / fft_size as f32;
+                        let pos = trigger_pos + t * period;
+                        let s = get_snapshot_cubic(pos, &snapshot);
+                        // Apply Blackman-Harris for high-res preview too
+                        let t_win = i as f32 / (fft_size - 1) as f32;
+                        let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
+                        let window = a0 - a1 * (2.0 * std::f32::consts::PI * t_win).cos() + a2 * (4.0 * std::f32::consts::PI * t_win).cos() - a3 * (6.0 * std::f32::consts::PI * t_win).cos();
+                        fft_buf[i] = Complex { re: (s - mean) * window, im: 0.0 };
+                    }
+                    fft.process(&mut fft_buf);
+                    current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 12.8 / fft_size as f32).collect();
                 }
-                fft.process(&mut fft_buf);
-                current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 2.0 / fft_size as f32).collect();
 
                 if !current_mags.is_empty() {
                     if let Some(mut ema_mags) = ema_mags_mutex.try_lock() {
                         if ema_mags.len() != current_mags.len() { *ema_mags = current_mags; }
-                        else { for (i, m) in current_mags.iter().enumerate() { ema_mags[i] = ema_mags[i] * 0.8 + m * 0.2; } }
+                        else { for (i, m) in current_mags.iter().enumerate() { ema_mags[i] = ema_mags[i] * 0.85 + m * 0.15; } }
                     }
                 }
 
@@ -257,14 +313,14 @@ impl Plugin for CurveSampler {
 
                     ui.columns(2, |columns| {
                         columns[0].vertical_centered(|ui| {
-                            ui.label("Oscilloscope");
+                            ui.label("Oscilloscope (Locked)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
                             if preview_cycle.len() >= 2 {
                                 let pts: Vec<egui::Pos2> = preview_cycle.iter().enumerate().map(|(i, &y)| {
                                     let x = rect.left() + (i as f32 / (preview_cycle.len() - 1) as f32) * rect.width();
-                                    let py = rect.center().y - y * rect.height() * 0.45;
+                                    let py = rect.center().y - (y - center) / range * rect.height() * 0.45;
                                     egui::pos2(x, py)
                                 }).collect();
                                 painter.line(pts, (1.2, egui::Color32::YELLOW));
@@ -276,7 +332,7 @@ impl Plugin for CurveSampler {
                         });
 
                         columns[1].vertical_centered(|ui| {
-                            ui.label("Spectrum");
+                            ui.label("Spectrum (Stable)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
@@ -329,8 +385,9 @@ impl Plugin for CurveSampler {
                                 if let Ok(curve) = curve_core::zebra_format::parse(&text) {
                                     let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
                                     let mut last_pos: Option<egui::Pos2> = None;
-                                    for i in 0..=256 {
-                                        let t = i as f32 / 256.0;
+                                    let preview_steps = 512;
+                                    for i in 0..=preview_steps {
+                                        let t = i as f32 / preview_steps as f32;
                                         let y = curve.eval(t);
                                         let px = rect.left() + t * rect.width();
                                         let py = rect.bottom() - y * rect.height();
@@ -341,6 +398,8 @@ impl Plugin for CurveSampler {
                                         }
                                         last_pos = Some(pos);
                                     }
+                                } else {
+                                    painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
                                 }
                             }
                         });
@@ -397,7 +456,7 @@ impl CurveSampler {
             let t = i as f32 / 1024.0;
             let offset = t * period_samples;
             let pos = (start_pos + offset) % BUFFER_SIZE as f32;
-            let sample = audio_buf[pos.floor() as usize]; // Linear/Floor for extraction speed
+            let sample = audio_buf[pos.floor() as usize];
             cycle.push(sample);
         }
         let mut min = f32::INFINITY; let mut max = f32::NEG_INFINITY;
@@ -408,6 +467,19 @@ impl CurveSampler {
             *raw_data = cycle;
             self.capture_ready.store(true, Ordering::SeqCst);
         }
+    }
+    fn get_cubic_sample_at(&self, audio_buf: &[f32], pos: f32) -> f32 {
+        let i1 = pos.floor() as usize;
+        let i0 = if i1 == 0 { BUFFER_SIZE - 1 } else { i1 - 1 };
+        let i2 = (i1 + 1) % BUFFER_SIZE;
+        let i3 = (i1 + 2) % BUFFER_SIZE;
+        let t = pos - i1 as f32;
+        let y0 = audio_buf[i0]; let y1 = audio_buf[i1]; let y2 = audio_buf[i2]; let y3 = audio_buf[i3];
+        let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+        let b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+        let c = -0.5 * y0 + 0.5 * y2;
+        let d = y1;
+        a * t * t * t + b * t * t + c * t + d
     }
 }
 

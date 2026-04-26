@@ -74,22 +74,26 @@ impl BezierCurve {
         while i < self.points.len() - 1 {
             let mut j = i + 1;
             while j < self.points.len() - 1 {
-                // Check if point j can be removed by merging segments [i, j] and [j, j+1]
                 let p_prev = self.points[i].position;
                 let p_curr = self.points[j].position;
                 let p_next = self.points[j + 1].position;
 
-                // Are they collinear?
-                let cross_product = (p_curr.1 - p_prev.1) * (p_next.0 - p_prev.0) - (p_curr.0 - p_prev.0) * (p_next.1 - p_prev.1);
-                let is_collinear = cross_product.abs() < tolerance;
+                // Distance from point p_curr to line (p_prev, p_next)
+                let dx = p_next.0 - p_prev.0;
+                let dy = p_next.1 - p_prev.1;
+                let len_sq = dx * dx + dy * dy;
+                
+                let dist = if len_sq < 1e-9 {
+                    ((p_curr.0 - p_prev.0).powi(2) + (p_curr.1 - p_prev.1).powi(2)).sqrt()
+                } else {
+                    let t = ((p_curr.0 - p_prev.0) * dx + (p_curr.1 - p_prev.1) * dy) / len_sq;
+                    let t = t.clamp(0.0, 1.0);
+                    let proj_x = p_prev.0 + t * dx;
+                    let proj_y = p_prev.1 + t * dy;
+                    ((p_curr.0 - proj_x).powi(2) + (p_curr.1 - proj_y).powi(2)).sqrt()
+                };
 
-                // Are tangents also linear?
-                let is_linear_prev = self.points[i].outgoing.is_none() || (self.points[i].outgoing.unwrap().1 - 1.0 / 3.0).abs() < tolerance;
-                let is_linear_curr_in = self.points[j].incoming.is_none() || (self.points[j].incoming.unwrap().1 - 2.0 / 3.0).abs() < tolerance;
-                let is_linear_curr_out = self.points[j].outgoing.is_none() || (self.points[j].outgoing.unwrap().1 - 1.0 / 3.0).abs() < tolerance;
-                let is_linear_next = self.points[j + 1].incoming.is_none() || (self.points[j + 1].incoming.unwrap().1 - 2.0 / 3.0).abs() < tolerance;
-
-                if is_collinear && is_linear_prev && is_linear_curr_in && is_linear_curr_out && is_linear_next {
+                if dist < tolerance {
                     j += 1;
                 } else {
                     break;
@@ -99,12 +103,12 @@ impl BezierCurve {
             i = j;
         }
 
-        // Adjust handles for merged segments
+        // Fix tangents for simplified segments to be perfectly linear
         for k in 0..new_points.len() - 1 {
-            if new_points[k].outgoing.is_none() {
-                new_points[k].outgoing = Some((1.0 / 3.0, 1.0 / 3.0));
-            }
-            if new_points[k+1].incoming.is_none() {
+            // If the distance between points is large but segments were merged,
+            // force linear handles (1/3 and 2/3) to ensure a straight line.
+            new_points[k].outgoing = Some((1.0 / 3.0, 1.0 / 3.0));
+            if k + 1 < new_points.len() {
                 new_points[k+1].incoming = Some((2.0 / 3.0, 2.0 / 3.0));
             }
         }

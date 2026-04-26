@@ -181,8 +181,10 @@ pub fn samples_to_spectrum_steps(
         .iter()
         .enumerate()
         .map(|(i, &y)| {
-            // 2. Subtract mean and apply Hann window to reduce leakage
-            let window = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (n - 1) as f32).cos());
+            // Subtract mean and apply Blackman-Harris window for maximum leakage suppression
+            let t = i as f32 / (n - 1) as f32;
+            let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
+            let window = a0 - a1 * (2.0 * std::f32::consts::PI * t).cos() + a2 * (4.0 * std::f32::consts::PI * t).cos() - a3 * (6.0 * std::f32::consts::PI * t).cos();
             Complex { re: (y - mean) * window, im: 0.0 }
         })
         .collect();
@@ -191,14 +193,10 @@ pub fn samples_to_spectrum_steps(
     FftPlanner::new().plan_fft_forward(fft_size).process(&mut buf);
 
     let num_harmonics = fft_size / 2;
-    // 3. Scaling:
-    // norm * 2 / n (Real FFT compensation) 
-    // * 2 (Hann window compensation)
-    // * 2 (Zebra 0.5 amplitude -> 1.0 magnitude)
-    // Total = 8 / n
+    // Scaling: compensation for Real FFT, Window Gain (~3.2 for B-H), and Zebra scaling.
     let magnitudes: Vec<f32> = buf[..num_harmonics]
         .iter()
-        .map(|c| c.norm() * 8.0 / n as f32)
+        .map(|c| c.norm() * 12.8 / n as f32) 
         .collect();
 
     let normalized = magnitudes;

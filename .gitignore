@@ -1,2 +1,5 @@
 /target
 /pkg
+CurveExtractor.clap
+CurveExtractor.vst3
+local_bundle/

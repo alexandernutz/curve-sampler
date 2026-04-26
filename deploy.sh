@@ -1,8 +1,10 @@
 #!/bin/bash
-VERSION=$1
-if [ -z "$VERSION" ]; then
-    VERSION="0.1.$(date +%s)"
-fi
+# 0. Increment version
+if [ ! -f .version ]; then echo "0" > .version; fi
+OLD_VERSION=$(cat .version)
+NEW_VERSION=$((OLD_VERSION + 1))
+echo $NEW_VERSION > .version
+VERSION="0.1.$NEW_VERSION"
 
 echo "Deploying version: $VERSION"
 

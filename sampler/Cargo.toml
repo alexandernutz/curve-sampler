@@ -12,3 +12,4 @@ nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["opengl"] }
 log = "0.4"
 parking_lot = "0.12"
+rustfft = "6"

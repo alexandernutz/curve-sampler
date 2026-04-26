@@ -1076,6 +1076,7 @@ dependencies = [
  "nih_plug",
  "nih_plug_egui",
  "parking_lot",
+ "rustfft",
 ]
 
 [[package]]

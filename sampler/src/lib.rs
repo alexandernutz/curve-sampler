@@ -28,13 +28,29 @@ pub enum CurveDomain {
     Spectrum,
 }
 
+#[derive(Enum, PartialEq, Clone, Copy, Debug)]
+pub enum TrackingMode {
+    Auto,
+    Manual,
+}
+
+#[derive(Enum, PartialEq, Clone, Copy, Debug)]
+pub enum ChordPriority {
+    LowestNote,
+    CommonPeriod,
+}
+
 struct CurveSampler {
     params: Arc<CurveSamplerParams>,
     
     audio_buffer: Arc<Mutex<Vec<f32>>>,
     write_idx: Arc<AtomicUsize>,
-    current_freq: Arc<AtomicU32>,
     sample_rate: Arc<AtomicU32>,
+    
+    /// Final frequency used by the visualizers and capture logic.
+    target_freq: Arc<AtomicU32>,
+    /// List of currently held MIDI notes.
+    active_midi_notes: Arc<Mutex<Vec<u8>>>,
     
     trigger_capture: Arc<AtomicBool>,
     captured_string: Arc<Mutex<String>>,
@@ -58,30 +74,30 @@ struct CurveSamplerParams {
     
     #[id = "norm"]
     pub normalize_capture: BoolParam,
+
+    #[id = "track_mode"]
+    pub tracking_mode: EnumParam<TrackingMode>,
+
+    #[id = "chord_pri"]
+    pub chord_priority: EnumParam<ChordPriority>,
+
+    #[id = "freq1"]
+    pub manual_freq1: FloatParam,
+    #[id = "freq2"]
+    pub manual_freq2: FloatParam,
+    #[id = "freq3"]
+    pub manual_freq3: FloatParam,
 }
 
 impl Default for CurveSampler {
     fn default() -> Self {
-        log_to_file("CurveSampler::default()");
-        
-        std::panic::set_hook(Box::new(|info| {
-            let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = info.payload().downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "Unknown panic".to_string()
-            };
-            let location = info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
-            log_to_file(&format!("PANIC: {}{}", msg, location));
-        }));
-
         Self {
             params: Arc::new(CurveSamplerParams::default()),
             audio_buffer: Arc::new(Mutex::new(vec![0.0; BUFFER_SIZE])),
             write_idx: Arc::new(AtomicUsize::new(0)),
-            current_freq: Arc::new(AtomicU32::new(440.0f32.to_bits())),
             sample_rate: Arc::new(AtomicU32::new(48000.0f32.to_bits())),
+            target_freq: Arc::new(AtomicU32::new(440.0f32.to_bits())),
+            active_midi_notes: Arc::new(Mutex::new(Vec::with_capacity(16))),
             trigger_capture: Arc::new(AtomicBool::new(false)),
             captured_string: Arc::new(Mutex::new(String::from("No curve captured yet."))),
             raw_cycle: Arc::new(Mutex::new(Vec::with_capacity(1024))),
@@ -97,9 +113,14 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 600),
+            editor_state: EguiState::from_size(700, 650),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
+            tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
+            chord_priority: EnumParam::new("Chord Priority", ChordPriority::LowestNote),
+            manual_freq1: FloatParam::new("Freq 1", 440.0, FloatRange::Skewed { min: 1.0, max: 20000.0, factor: 0.2 }),
+            manual_freq2: FloatParam::new("Freq 2", 0.0, FloatRange::Skewed { min: 0.0, max: 20000.0, factor: 0.2 }),
+            manual_freq3: FloatParam::new("Freq 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20000.0, factor: 0.2 }),
         }
     }
 }
@@ -109,7 +130,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.24";
+    const VERSION: &'static str = "0.1.27";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -135,7 +156,6 @@ impl Plugin for CurveSampler {
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        log_to_file("CurveSampler::editor() called");
         let trigger = self.trigger_capture.clone();
         let captured = self.captured_string.clone();
         let raw_cycle = self.raw_cycle.clone();
@@ -145,8 +165,9 @@ impl Plugin for CurveSampler {
         
         let audio_buffer_mutex = self.audio_buffer.clone();
         let write_idx_atomic = self.write_idx.clone();
-        let current_freq_atomic = self.current_freq.clone();
+        let target_freq_atomic = self.target_freq.clone();
         let sample_rate_atomic = self.sample_rate.clone();
+        let active_midi_notes = self.active_midi_notes.clone();
 
         let ema_period_mutex = self.ema_period.clone();
         let ema_mags_mutex = self.ema_magnitudes.clone();
@@ -155,17 +176,16 @@ impl Plugin for CurveSampler {
         create_egui_editor(
             self.params.editor_state.clone(),
             (),
-            |_ctx, _user_state| {
-                log_to_file("egui init closure");
-            },
+            |_ctx, _user_state| {},
             move |egui_ctx, setter, _user_state| {
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
                             let mut curve = match *domain {
                                 CurveDomain::Geometry => {
-                                    let mut c = fit_bezier_interp(&raw_data, 64, 1, "Peaks And Valleys");
-                                    c.simplify(0.002);
+                                    // Use adaptive fitting to preserve sharp edges and transients
+                                    let mut c = curve_core::bezier::fit_bezier_adaptive(&raw_data, 128, 1, "Peaks And Valleys");
+                                    c.simplify(0.001);
                                     c
                                 }
                                 CurveDomain::Spectrum => {
@@ -190,29 +210,52 @@ impl Plugin for CurveSampler {
 
                 let mut preview_cycle = Vec::new();
                 let mut current_mags = Vec::new();
-                let mut period = 100.0;
-                let mut center = 0.0;
-                let mut range = 1.0;
+                let mut period;
+                let mut center;
+                let mut range;
                 
-                // --- Step A: Snapshot ---
                 let mut snapshot = vec![0.0f32; 8192];
                 if let Some(buffer) = audio_buffer_mutex.try_lock() {
                     let w_idx = write_idx_atomic.load(Ordering::Relaxed);
                     for i in 0..8192 { snapshot[8191 - i] = buffer[(w_idx + BUFFER_SIZE - 1 - i) % BUFFER_SIZE]; }
-                } else {
-                    return; // Avoid blocking UI if audio thread has lock
-                }
+                } else { return; }
                 
                 let snap_len = snapshot.len();
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
-                let midi_freq = f32::from_bits(current_freq_atomic.load(Ordering::Relaxed));
-                let midi_period = (sample_rate / midi_freq).clamp(8.0, 4000.0);
+                
+                // --- Target Frequency Calculation ---
+                let mut base_freq = 440.0;
+                if params.tracking_mode.value() == TrackingMode::Auto {
+                    if let Some(notes) = active_midi_notes.try_lock() {
+                        if !notes.is_empty() {
+                            if params.chord_priority.value() == ChordPriority::LowestNote {
+                                base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
+                            } else {
+                                // Common Period Logic
+                                base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
+                                if notes.len() >= 2 {
+                                    let f2 = 440.0 * 2.0_f32.powf((notes[1] as f32 - 69.0) / 12.0);
+                                    let ratio = f2 / base_freq;
+                                    // 5th (1.5), 4th (1.33), 3rd (1.25)
+                                    if (ratio - 1.5).abs() < 0.05 { base_freq /= 2.0; }
+                                    else if (ratio - 1.33).abs() < 0.05 { base_freq /= 3.0; }
+                                    else if (ratio - 1.25).abs() < 0.05 { base_freq /= 4.0; }
+                                }
+                            }
+                        } else { base_freq = params.manual_freq1.value(); }
+                    }
+                } else {
+                    base_freq = params.manual_freq1.value();
+                }
+                target_freq_atomic.store(base_freq.to_bits(), Ordering::Relaxed);
+                
+                let target_period = (sample_rate / base_freq).clamp(8.0, 4000.0);
 
                 let mut filtered = vec![0.0f32; snap_len];
                 let mut lp = 0.0f32;
                 for i in 0..snap_len { lp = lp * 0.8 + snapshot[i] * 0.2; filtered[i] = lp; }
 
-                let analysis_limit = (midi_period * 8.0) as usize;
+                let analysis_limit = (target_period * 8.0) as usize;
                 let start_idx = snap_len.saturating_sub(analysis_limit);
                 let mut s_min = 0.0f32; let mut s_max = 0.0f32;
                 for i in start_idx..snap_len { let val = filtered[i]; if val < s_min { s_min = val; } if val > s_max { s_max = val; } }
@@ -236,24 +279,20 @@ impl Plugin for CurveSampler {
                 let mut trigger_pos = (snap_len - 1) as f32;
                 if crossings.len() >= 2 {
                     let p = crossings[0] - crossings[1];
-                    if (p - midi_period).abs() < midi_period * 0.4 || (p - midi_period*0.5).abs() < p*0.1 || (p - midi_period*2.0).abs() < p*0.1 {
+                    if (p - target_period).abs() < target_period * 0.4 || (p - target_period*0.5).abs() < p*0.1 || (p - target_period*2.0).abs() < p*0.1 {
                         period = p;
-                    } else { period = midi_period; }
+                    } else { period = target_period; }
                     trigger_pos = crossings[0] - period; 
-                } else { period = midi_period; }
+                } else { period = target_period; }
 
                 if let Some(mut ema_p) = ema_period_mutex.try_lock() { *ema_p = *ema_p * 0.95 + period * 0.05; }
                 period = *ema_period_mutex.lock();
 
-                // ULTRASAFE Cubic Sampler
                 let get_snapshot_cubic = |pos: f32, snap: &[f32]| -> f32 {
                     let snap_len = snap.len();
                     if snap_len < 4 { return 0.0; }
                     let p = pos.clamp(2.0, (snap_len - 3) as f32);
-                    let i1 = p.floor() as usize; 
-                    let i2 = i1 + 1;
-                    let i0 = i1 - 1;
-                    let i3 = i1 + 2;
+                    let i1 = p.floor() as usize; let i2 = i1 + 1; let i0 = i1 - 1; let i3 = i1 + 2;
                     let t = p - i1 as f32;
                     let y0 = snap[i0]; let y1 = snap[i1]; let y2 = snap[i2]; let y3 = snap[i3];
                     let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
@@ -280,16 +319,15 @@ impl Plugin for CurveSampler {
                         let pos = trigger_pos + t * period;
                         sum += get_snapshot_cubic(pos, &snapshot);
                     }
-                    let mean = sum / fft_size as f32;
+                    let mean_val = sum / fft_size as f32;
                     for i in 0..fft_size {
                         let t = i as f32 / fft_size as f32;
                         let pos = trigger_pos + t * period;
                         let s = get_snapshot_cubic(pos, &snapshot);
-                        // Apply Blackman-Harris for high-res preview too
                         let t_win = i as f32 / (fft_size - 1) as f32;
                         let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
                         let window = a0 - a1 * (2.0 * std::f32::consts::PI * t_win).cos() + a2 * (4.0 * std::f32::consts::PI * t_win).cos() - a3 * (6.0 * std::f32::consts::PI * t_win).cos();
-                        fft_buf[i] = Complex { re: (s - mean) * window, im: 0.0 };
+                        fft_buf[i] = Complex { re: (s - mean_val) * window, im: 0.0 };
                     }
                     fft.process(&mut fft_buf);
                     current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 12.8 / fft_size as f32).collect();
@@ -309,11 +347,63 @@ impl Plugin for CurveSampler {
                             ui.label(format!("v{}", Self::VERSION));
                         });
                     });
+                    
+                    // --- Tracking Panel ---
+                    let mut current_mode = params.tracking_mode.value();
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Tracking:");
+                            if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)").clicked() {
+                                setter.begin_set_parameter(&params.tracking_mode);
+                                setter.set_parameter(&params.tracking_mode, current_mode);
+                                setter.end_set_parameter(&params.tracking_mode);
+                            }
+                            if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual").clicked() {
+                                setter.begin_set_parameter(&params.tracking_mode);
+                                setter.set_parameter(&params.tracking_mode, current_mode);
+                                setter.end_set_parameter(&params.tracking_mode);
+                            }
+                            
+                            ui.add_space(20.0);
+                            if current_mode == TrackingMode::Auto {
+                                ui.label("Chord:");
+                                let mut pri = params.chord_priority.value();
+                                if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
+                                    setter.begin_set_parameter(&params.chord_priority);
+                                    setter.set_parameter(&params.chord_priority, pri);
+                                    setter.end_set_parameter(&params.chord_priority);
+                                }
+                                if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
+                                    setter.begin_set_parameter(&params.chord_priority);
+                                    setter.set_parameter(&params.chord_priority, pri);
+                                    setter.end_set_parameter(&params.chord_priority);
+                                }
+                            }
+                        });
+                        
+                        if current_mode == TrackingMode::Manual {
+                            ui.horizontal(|ui| {
+                                ui.label("Freqs:");
+                                for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
+                                    let mut val = p.value();
+                                    if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
+                                        setter.begin_set_parameter(*p);
+                                        setter.set_parameter(*p, val);
+                                        setter.end_set_parameter(*p);
+                                    }
+                                }
+                            });
+                        }
+                        
+                        let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
+                        ui.label(format!("Active Target: {:.2} Hz", display_freq));
+                    });
+
                     ui.add_space(10.0);
 
                     ui.columns(2, |columns| {
                         columns[0].vertical_centered(|ui| {
-                            ui.label("Oscilloscope (Locked)");
+                            ui.label("Oscilloscope");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
@@ -332,7 +422,7 @@ impl Plugin for CurveSampler {
                         });
 
                         columns[1].vertical_centered(|ui| {
-                            ui.label("Spectrum (Stable)");
+                            ui.label("Spectrum");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
@@ -418,12 +508,24 @@ impl Plugin for CurveSampler {
     ) -> ProcessStatus {
         let sample_rate = context.transport().sample_rate;
         self.sample_rate.store(sample_rate.to_bits(), Ordering::Relaxed);
+        
         while let Some(event) = context.next_event() {
-            if let NoteEvent::NoteOn { note, .. } = event {
-                let freq = 440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0);
-                self.current_freq.store(freq.to_bits(), Ordering::Relaxed);
+            match event {
+                NoteEvent::NoteOn { note, .. } => {
+                    if let Some(mut notes) = self.active_midi_notes.try_lock() {
+                        notes.push(note);
+                        notes.sort();
+                    }
+                }
+                NoteEvent::NoteOff { note, .. } => {
+                    if let Some(mut notes) = self.active_midi_notes.try_lock() {
+                        notes.retain(|&n| n != note);
+                    }
+                }
+                _ => (),
             }
         }
+        
         let mut trigger = self.trigger_capture.load(Ordering::SeqCst);
         let mut w_idx = self.write_idx.load(Ordering::Relaxed);
         if let Some(mut audio_buf) = self.audio_buffer.try_lock() {
@@ -447,9 +549,10 @@ impl Plugin for CurveSampler {
 
 impl CurveSampler {
     fn perform_extraction(&self, sample_rate: f32, audio_buf: &[f32], write_idx: usize) {
-        let freq = f32::from_bits(self.current_freq.load(Ordering::Relaxed));
+        let freq = f32::from_bits(self.target_freq.load(Ordering::Relaxed));
         let period_samples = sample_rate / freq;
         if period_samples < 2.0 || period_samples > (BUFFER_SIZE / 4) as f32 { return; }
+
         let mut cycle = Vec::with_capacity(1024);
         let start_pos = (write_idx as f32 + BUFFER_SIZE as f32 - period_samples) % BUFFER_SIZE as f32;
         for i in 0..1024 {
@@ -459,27 +562,16 @@ impl CurveSampler {
             let sample = audio_buf[pos.floor() as usize];
             cycle.push(sample);
         }
+
         let mut min = f32::INFINITY; let mut max = f32::NEG_INFINITY;
         for &s in &cycle { if s < min { min = s; } if s > max { max = s; } }
         let range = (max - min).max(1e-6);
         for s in &mut cycle { *s = (*s - min) / range; }
+
         if let Some(mut raw_data) = self.raw_cycle.try_lock() {
             *raw_data = cycle;
             self.capture_ready.store(true, Ordering::SeqCst);
         }
-    }
-    fn get_cubic_sample_at(&self, audio_buf: &[f32], pos: f32) -> f32 {
-        let i1 = pos.floor() as usize;
-        let i0 = if i1 == 0 { BUFFER_SIZE - 1 } else { i1 - 1 };
-        let i2 = (i1 + 1) % BUFFER_SIZE;
-        let i3 = (i1 + 2) % BUFFER_SIZE;
-        let t = pos - i1 as f32;
-        let y0 = audio_buf[i0]; let y1 = audio_buf[i1]; let y2 = audio_buf[i2]; let y3 = audio_buf[i3];
-        let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
-        let b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
-        let c = -0.5 * y0 + 0.5 * y2;
-        let d = y1;
-        a * t * t * t + b * t * t + c * t + d
     }
 }
 

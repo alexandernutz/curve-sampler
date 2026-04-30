@@ -117,6 +117,114 @@ impl BezierCurve {
     }
 }
 
+/// Fits a piecewise cubic Bézier to `samples` using adaptive knot placement.
+///
+/// This version concentrates points where the waveform is changing most rapidly
+/// (e.g. sharp jumps in a sawtooth), preserving transients and jagged edges.
+pub fn fit_bezier_adaptive(
+    samples: &[f32],
+    max_segments: usize,
+    curve_id: u32,
+    morph_type: &str,
+) -> BezierCurve {
+    let ns = samples.len();
+    if ns < 2 {
+        return BezierCurve { points: vec![], curve_id, morph_type: morph_type.to_string() };
+    }
+
+    // 1. Calculate Importance density map
+    // We look at the absolute first derivative (slope) and second derivative (curvature)
+    let mut importance = vec![0.05f32; ns]; // Baseline importance for even distribution
+    for i in 1..ns - 1 {
+        let slope = (samples[i] - samples[i-1]).abs();
+        let curvature = (samples[i+1] - 2.0*samples[i] + samples[i-1]).abs();
+        // Emphasize slope heavily for jumps (saw/square)
+        importance[i] += slope * 5.0 + curvature * 2.0;
+    }
+
+    // 2. Cumulative importance
+    let mut cumulative = vec![0.0f32; ns];
+    let mut total = 0.0;
+    for i in 0..ns {
+        total += importance[i];
+        cumulative[i] = total;
+    }
+
+    // 3. Pick knot indices based on equal-importance intervals
+    let n_knots = (max_segments + 1).min(ns);
+    let mut knot_indices = Vec::with_capacity(n_knots);
+    knot_indices.push(0);
+    
+    for k in 1..n_knots-1 {
+        let target = (k as f32 / (n_knots - 1) as f32) * total;
+        let idx = match cumulative.binary_search_by(|v| v.partial_cmp(&target).unwrap()) {
+            Ok(i) => i,
+            Err(i) => i.min(ns - 1),
+        };
+        if !knot_indices.contains(&idx) {
+            knot_indices.push(idx);
+        }
+    }
+    if !knot_indices.contains(&(ns - 1)) {
+        knot_indices.push(ns - 1);
+    }
+    knot_indices.sort();
+
+    // 4. Build control points with Catmull-Rom tangents
+    let mut points = Vec::with_capacity(knot_indices.len());
+    for i in 0..knot_indices.len() {
+        let idx = knot_indices[i];
+        let x = idx as f32 / (ns - 1) as f32;
+        let y = samples[idx];
+
+        // Slope calculation for tangents
+        let slope = if i == 0 {
+            (samples[knot_indices[1]] - samples[0]) / (knot_indices[1] as f32 / (ns - 1) as f32)
+        } else if i == knot_indices.len() - 1 {
+            let prev_idx = knot_indices[i - 1];
+            (samples[ns - 1] - samples[prev_idx]) / ((ns - 1 - prev_idx) as f32 / (ns - 1) as f32)
+        } else {
+            let next_idx = knot_indices[i + 1];
+            let prev_idx = knot_indices[i - 1];
+            (samples[next_idx] - samples[prev_idx]) / ((next_idx - prev_idx) as f32 / (ns - 1) as f32)
+        };
+
+        let outgoing = if i < knot_indices.len() - 1 {
+            let next_idx = knot_indices[i + 1];
+            let dx = (next_idx - idx) as f32 / (ns - 1) as f32;
+            let dy_seg = samples[next_idx] - y;
+            let handle_y = y + slope * dx / 3.0;
+            let ty = if dy_seg.abs() > 1e-6 {
+                ((handle_y - y) / dy_seg).clamp(-4.0, 5.0)
+            } else {
+                1.0 / 3.0
+            };
+            Some((1.0_f32 / 3.0, ty))
+        } else {
+            None
+        };
+
+        let incoming = if i > 0 {
+            let prev_idx = knot_indices[i - 1];
+            let dx = (idx - prev_idx) as f32 / (ns - 1) as f32;
+            let dy_seg = y - samples[prev_idx];
+            let handle_y = y - slope * dx / 3.0;
+            let ty = if dy_seg.abs() > 1e-6 {
+                ((handle_y - samples[prev_idx]) / dy_seg).clamp(-4.0, 5.0)
+            } else {
+                2.0 / 3.0
+            };
+            Some((2.0_f32 / 3.0, ty))
+        } else {
+            None
+        };
+
+        points.push(ControlPoint { position: (x, y), incoming, outgoing });
+    }
+
+    BezierCurve { points, curve_id, morph_type: morph_type.to_string() }
+}
+
 fn cubic_bezier(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {
     let s = 1.0 - t;
     s * s * s * a + 3.0 * s * s * t * b + 3.0 * s * t * t * c + t * t * t * d

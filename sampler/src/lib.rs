@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering, AtomicU32, AtomicUsize};
 use std::fs::OpenOptions;
 use std::io::Write;
-use curve_core::bezier::{fit_bezier, fit_bezier_interp};
+use curve_core::bezier::{fit_bezier, fit_bezier_interp, fit_bezier_adaptive};
 use curve_core::zebra_format;
 
 const BUFFER_SIZE: usize = 32768;
@@ -47,9 +47,7 @@ struct CurveSampler {
     write_idx: Arc<AtomicUsize>,
     sample_rate: Arc<AtomicU32>,
     
-    /// Final frequency used by the visualizers and capture logic.
     target_freq: Arc<AtomicU32>,
-    /// List of currently held MIDI notes.
     active_midi_notes: Arc<Mutex<Vec<u8>>>,
     
     trigger_capture: Arc<AtomicBool>,
@@ -130,7 +128,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.27";
+    const VERSION: &'static str = "0.1.31";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -183,8 +181,7 @@ impl Plugin for CurveSampler {
                         if !raw_data.is_empty() {
                             let mut curve = match *domain {
                                 CurveDomain::Geometry => {
-                                    // Use adaptive fitting to preserve sharp edges and transients
-                                    let mut c = curve_core::bezier::fit_bezier_adaptive(&raw_data, 128, 1, "Peaks And Valleys");
+                                    let mut c = fit_bezier_adaptive(&raw_data, 128, 1, "Peaks And Valleys");
                                     c.simplify(0.001);
                                     c
                                 }
@@ -223,7 +220,6 @@ impl Plugin for CurveSampler {
                 let snap_len = snapshot.len();
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
                 
-                // --- Target Frequency Calculation ---
                 let mut base_freq = 440.0;
                 if params.tracking_mode.value() == TrackingMode::Auto {
                     if let Some(notes) = active_midi_notes.try_lock() {
@@ -231,12 +227,10 @@ impl Plugin for CurveSampler {
                             if params.chord_priority.value() == ChordPriority::LowestNote {
                                 base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
                             } else {
-                                // Common Period Logic
                                 base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
                                 if notes.len() >= 2 {
                                     let f2 = 440.0 * 2.0_f32.powf((notes[1] as f32 - 69.0) / 12.0);
                                     let ratio = f2 / base_freq;
-                                    // 5th (1.5), 4th (1.33), 3rd (1.25)
                                     if (ratio - 1.5).abs() < 0.05 { base_freq /= 2.0; }
                                     else if (ratio - 1.33).abs() < 0.05 { base_freq /= 3.0; }
                                     else if (ratio - 1.25).abs() < 0.05 { base_freq /= 4.0; }
@@ -282,7 +276,8 @@ impl Plugin for CurveSampler {
                     if (p - target_period).abs() < target_period * 0.4 || (p - target_period*0.5).abs() < p*0.1 || (p - target_period*2.0).abs() < p*0.1 {
                         period = p;
                     } else { period = target_period; }
-                    trigger_pos = crossings[0] - period; 
+                    // Phase Offset logic: Start analysis 25% into the wave to keep jumps away from edges
+                    trigger_pos = crossings[0] - period * 0.75; 
                 } else { period = target_period; }
 
                 if let Some(mut ema_p) = ema_period_mutex.try_lock() { *ema_p = *ema_p * 0.95 + period * 0.05; }
@@ -324,13 +319,11 @@ impl Plugin for CurveSampler {
                         let t = i as f32 / fft_size as f32;
                         let pos = trigger_pos + t * period;
                         let s = get_snapshot_cubic(pos, &snapshot);
-                        let t_win = i as f32 / (fft_size - 1) as f32;
-                        let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
-                        let window = a0 - a1 * (2.0 * std::f32::consts::PI * t_win).cos() + a2 * (4.0 * std::f32::consts::PI * t_win).cos() - a3 * (6.0 * std::f32::consts::PI * t_win).cos();
-                        fft_buf[i] = Complex { re: (s - mean_val) * window, im: 0.0 };
+                        // No window for phase-locked data, but centered discontinuity
+                        fft_buf[i] = Complex { re: s - mean_val, im: 0.0 };
                     }
                     fft.process(&mut fft_buf);
-                    current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 12.8 / fft_size as f32).collect();
+                    current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 4.0 / fft_size as f32).collect();
                 }
 
                 if !current_mags.is_empty() {
@@ -348,7 +341,6 @@ impl Plugin for CurveSampler {
                         });
                     });
                     
-                    // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
@@ -403,7 +395,7 @@ impl Plugin for CurveSampler {
 
                     ui.columns(2, |columns| {
                         columns[0].vertical_centered(|ui| {
-                            ui.label("Oscilloscope");
+                            ui.label("Oscilloscope (Locked)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
@@ -422,21 +414,26 @@ impl Plugin for CurveSampler {
                         });
 
                         columns[1].vertical_centered(|ui| {
-                            ui.label("Spectrum");
+                            ui.label("Spectrum (Stable dB)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
+                            painter.line_segment([egui::pos2(rect.left(), rect.top() + 5.0), egui::pos2(rect.right(), rect.top() + 5.0)], (1.0, egui::Color32::from_gray(60)));
+
                             if let Some(mags) = ema_mags_mutex.try_lock() {
-                                let max_mag = mags[1..].iter().cloned().fold(0.001f32, f32::max);
                                 let log_freq_scale = 10.0;
+                                let db_range = 60.0; 
                                 for k in 1..1024.min(mags.len()) {
-                                    let mag = (mags.get(k).copied().unwrap_or(0.0) / max_mag).min(1.0);
-                                    if mag < 0.001 { continue; }
+                                    let linear_mag = mags.get(k).copied().unwrap_or(0.0);
+                                    if linear_mag < 1e-6 { continue; }
+                                    let db = 20.0 * linear_mag.log10();
+                                    let norm_db = ((db + db_range) / db_range).clamp(0.0, 1.0);
+                                    if norm_db < 0.01 { continue; }
                                     let x_start = (k as f32).log2() / log_freq_scale;
                                     let x_end = ((k + 1) as f32).log2() / log_freq_scale;
                                     let px_start = rect.left() + x_start * rect.width();
                                     let px_end = rect.left() + x_end * rect.width();
-                                    let py = rect.bottom() - mag * 0.95 * rect.height();
+                                    let py = rect.bottom() - norm_db * rect.height();
                                     painter.rect_filled(egui::Rect::from_min_max(egui::pos2(px_start, py), egui::pos2(px_end, rect.bottom())), 0.0, egui::Color32::from_rgb(0, 180, 255));
                                 }
                             }

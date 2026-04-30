@@ -172,35 +172,52 @@ pub fn samples_to_spectrum_steps(
     morph_type: &str
 ) -> Result<BezierCurve, String> {
     let n = samples.len();
-    let fft_size = n.next_power_of_two().max(2048);
-    
-    // 1. Calculate actual mean to remove DC offset artifacts
+    // High-resolution FFT with zero-padding for precision
+    let fft_size = (n * 2).next_power_of_two().max(4096);
+
     let mean = samples.iter().sum::<f32>() / n as f32;
-    
+
     let mut buf: Vec<Complex<f32>> = samples
         .iter()
-        .enumerate()
-        .map(|(i, &y)| {
-            // Subtract mean and apply Blackman-Harris window for maximum leakage suppression
-            let t = i as f32 / (n - 1) as f32;
-            let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
-            let window = a0 - a1 * (2.0 * std::f32::consts::PI * t).cos() + a2 * (4.0 * std::f32::consts::PI * t).cos() - a3 * (6.0 * std::f32::consts::PI * t).cos();
-            Complex { re: (y - mean) * window, im: 0.0 }
-        })
+        .map(|&y| Complex { re: y - mean, im: 0.0 })
         .collect();
-    
+
     buf.resize(fft_size, Complex::default());
     FftPlanner::new().plan_fft_forward(fft_size).process(&mut buf);
 
     let num_harmonics = fft_size / 2;
-    // Scaling: compensation for Real FFT, Window Gain (~3.2 for B-H), and Zebra scaling.
+    // Scaling: 
+    // norm * 2 / n (Real FFT compensation)
+    // * 2 (Zebra 0.5 peak -> 1.0 magnitude mapping)
+    // Total = 4 / n
     let magnitudes: Vec<f32> = buf[..num_harmonics]
         .iter()
-        .map(|c| c.norm() * 12.8 / n as f32) 
+        .map(|c| c.norm() * 4.0 / n as f32)
         .collect();
 
-    let normalized = magnitudes;
+    // Map magnitudes to exact harmonic indices k by searching local maxima around expected bins
+    let bin_ratio = fft_size as f32 / n as f32;
+    let mut refined_mags = vec![0.0f32; 1025];
+    let db_range = 60.0f32;
 
+    for k in 1..=1024 {
+        let center_bin = (k as f32 * bin_ratio) as usize;
+        let mut peak = 0.0f32;
+        for b in (center_bin.saturating_sub(2))..(center_bin + 3).min(num_harmonics) {
+            peak = peak.max(magnitudes[b]);
+        }
+        
+        // Convert to dB-normalized Y value for Zebra 3 editor compatibility
+        if peak > 1e-6 {
+            let db = 20.0 * peak.log10();
+            let norm_y = ((db + db_range) / db_range).clamp(0.0, 1.0);
+            refined_mags[k] = norm_y;
+        } else {
+            refined_mags[k] = 0.0;
+        }
+    }
+
+    let normalized = refined_mags;
     const MAX_STEP_HARMONICS: usize = 1024;
     const STEP_FLOOR: f32 = 0.001;
     const SIMPLIFY_TOL: f32 = 0.001;

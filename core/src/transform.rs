@@ -25,7 +25,7 @@ pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Resul
         .map(|c| c.norm() * 4.0 / fft_size as f32)
         .collect();
     
-    let bin_ratio = fft_size as f32 / 1024.0; // Assume target is 1024
+    let bin_ratio = fft_size as f32 / 1024.0;
     let mut refined_mags = vec![0.0f32; 1025];
     let db_range = 60.0f32;
 
@@ -35,47 +35,35 @@ pub fn geometry_to_spectrum_steps(curve: &BezierCurve, fft_size: usize) -> Resul
         for b in (center_bin.saturating_sub(2))..(center_bin + 3).min(num_harmonics) {
             peak = peak.max(magnitudes[b]);
         }
-        
         if peak > 1e-6 {
             let db = 20.0 * peak.log10();
-            let norm_y = ((db + db_range) / db_range).clamp(0.0, 1.0);
-            refined_mags[k] = norm_y;
+            refined_mags[k] = ((db + db_range) / db_range).clamp(0.0, 1.0);
         } else {
             refined_mags[k] = 0.0;
         }
     }
 
-    const SIMPLIFY_TOL: f32 = 0.001;
-    let highest = (1..=1024).rev().find(|&k| refined_mags[k] > 0.002).unwrap_or(1);
+    let mut points = Vec::with_capacity(1024);
     let xpos = |k: usize| (k as f32).log2() / LOG_FREQ_SCALE;
-
-    let mut points = Vec::new();
-    let mut last_y = -1.0;
-    
-    for k in 1..=highest {
-        let x = xpos(k);
-        let y = refined_mags[k];
-        if (y - last_y).abs() > SIMPLIFY_TOL || k == 1 {
+    for k in 1..=1024 {
+        if refined_mags[k] > 0.001 || k == 1 {
             points.push(ControlPoint {
-                position: (x, y),
+                position: (xpos(k), refined_mags[k]),
                 incoming: Some((2.0 / 3.0, 2.0 / 3.0)), 
                 outgoing: Some((1.0 / 3.0, 1.0 / 3.0)) 
             });
-            last_y = y;
         }
     }
     
     if let Some(last) = points.last() {
         if last.position.0 < 1.0 {
-            points.push(ControlPoint {
-                position: (1.0, 0.0),
-                incoming: Some((2.0 / 3.0, 2.0 / 3.0)),
-                outgoing: None,
-            });
+            points.push(ControlPoint { position: (1.0, 0.0), incoming: Some((2.0 / 3.0, 2.0 / 3.0)), outgoing: None });
         }
     }
 
-    Ok(BezierCurve { points, curve_id: curve.curve_id, morph_type: curve.morph_type.clone() })
+    let mut new_curve = BezierCurve { points, curve_id: curve.curve_id, morph_type: curve.morph_type.clone() };
+    new_curve.simplify_to_budget(100);
+    Ok(new_curve)
 }
 
 /// Directly convert raw audio samples (one cycle) to a stepped spectral BezierCurve.
@@ -112,51 +100,35 @@ pub fn samples_to_spectrum_steps(
         for b in (center_bin.saturating_sub(2))..(center_bin + 3).min(num_harmonics) {
             peak = peak.max(magnitudes[b]);
         }
-        
         if peak > 1e-6 {
             let db = 20.0 * peak.log10();
-            let norm_y = ((db + db_range) / db_range).clamp(0.0, 1.0);
-            refined_mags[k] = norm_y;
+            refined_mags[k] = ((db + db_range) / db_range).clamp(0.0, 1.0);
         } else {
             refined_mags[k] = 0.0;
         }
     }
 
-    const SIMPLIFY_TOL: f32 = 0.001;
-    let highest = (1..=1024).rev().find(|&k| refined_mags[k] > 0.002).unwrap_or(1);
+    let mut points = Vec::with_capacity(1024);
     let xpos = |k: usize| (k as f32).log2() / LOG_FREQ_SCALE;
-
-    let mut points = Vec::new();
-    let mut last_y = -1.0;
-    
-    for k in 1..=highest {
-        let x = xpos(k);
-        let y = refined_mags[k];
-        if (y - last_y).abs() > SIMPLIFY_TOL || k == 1 {
+    for k in 1..=1024 {
+        if refined_mags[k] > 0.001 || k == 1 {
             points.push(ControlPoint {
-                position: (x, y),
+                position: (xpos(k), refined_mags[k]),
                 incoming: Some((2.0 / 3.0, 2.0 / 3.0)), 
                 outgoing: Some((1.0 / 3.0, 1.0 / 3.0)) 
             });
-            last_y = y;
         }
     }
     
     if let Some(last) = points.last() {
         if last.position.0 < 1.0 {
-            points.push(ControlPoint {
-                position: (1.0, 0.0),
-                incoming: Some((2.0 / 3.0, 2.0 / 3.0)),
-                outgoing: None,
-            });
+            points.push(ControlPoint { position: (1.0, 0.0), incoming: Some((2.0 / 3.0, 2.0 / 3.0)), outgoing: None });
         }
     }
 
-    Ok(BezierCurve { 
-        points, 
-        curve_id, 
-        morph_type: morph_type.to_string() 
-    })
+    let mut curve = BezierCurve { points, curve_id, morph_type: morph_type.to_string() };
+    curve.simplify_to_budget(100);
+    Ok(curve)
 }
 
 /// Map normalized harmonic amplitudes to a dense evenly-spaced array over x ∈ [0,1].
@@ -209,7 +181,7 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
 
     let num_harmonics = fft_size / 2;
     let magnitudes: Vec<f32> = buf[..num_harmonics].iter().map(|c| c.norm() / fft_size as f32).collect();
-    let max = magnitudes[1..].iter().cloned().fold(0.0f32, f32::max);
+    let max = magnitudes[1..].iter().cloned().fold(0.001f32, f32::max);
     let normalized: Vec<f32> = if max > 0.0 { magnitudes.iter().map(|&m| m / max).collect() } else { magnitudes };
 
     let dense = log_dense(&normalized);

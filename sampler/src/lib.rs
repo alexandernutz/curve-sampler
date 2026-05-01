@@ -40,6 +40,19 @@ pub enum ChordPriority {
     CommonPeriod,
 }
 
+/// A handle that sets an atomic boolean to false when dropped.
+/// Used to track GUI open/close state.
+struct GuiHandle {
+    is_open: Arc<AtomicBool>,
+}
+
+impl Drop for GuiHandle {
+    fn drop(&mut self) {
+        self.is_open.store(false, Ordering::Relaxed);
+        log_to_file("GUI Closed - Going to sleep");
+    }
+}
+
 struct CurveSampler {
     params: Arc<CurveSamplerParams>,
     
@@ -61,6 +74,9 @@ struct CurveSampler {
     ema_magnitudes: Arc<Mutex<Vec<f32>>>,
     
     fft_planner: Arc<Mutex<rustfft::FftPlanner<f32>>>,
+
+    /// Flag to tell the audio thread if the UI is active.
+    gui_is_open: Arc<AtomicBool>,
 }
 
 #[derive(Params)]
@@ -104,6 +120,7 @@ impl Default for CurveSampler {
             ema_period: Arc::new(Mutex::new(100.0)),
             ema_magnitudes: Arc::new(Mutex::new(vec![0.0; 1024])),
             fft_planner: Arc::new(Mutex::new(rustfft::FftPlanner::new())),
+            gui_is_open: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -128,7 +145,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.33";
+    const VERSION: &'static str = "0.1.38";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -154,6 +171,9 @@ impl Plugin for CurveSampler {
     }
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        log_to_file("GUI Opened - Waking up");
+        self.gui_is_open.store(true, Ordering::Relaxed);
+        
         let trigger = self.trigger_capture.clone();
         let captured = self.captured_string.clone();
         let raw_cycle = self.raw_cycle.clone();
@@ -171,11 +191,14 @@ impl Plugin for CurveSampler {
         let ema_mags_mutex = self.ema_magnitudes.clone();
         let fft_planner_mutex = self.fft_planner.clone();
 
+        // Create the drop handle for lifecycle tracking
+        let gui_handle = GuiHandle { is_open: self.gui_is_open.clone() };
+
         create_egui_editor(
             self.params.editor_state.clone(),
-            (),
+            gui_handle, // Pass it into the editor's user state
             |_ctx, _user_state| {},
-            move |egui_ctx, setter, _user_state| {
+            move |egui_ctx, setter, _gui_handle| {
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -208,8 +231,8 @@ impl Plugin for CurveSampler {
                 let mut preview_cycle = Vec::new();
                 let mut current_mags = Vec::new();
                 let mut period;
-                let mut center;
-                let mut range;
+                let mut center = 0.0;
+                let mut range = 1.0;
                 
                 let mut snapshot = vec![0.0f32; 8192];
                 if let Some(buffer) = audio_buffer_mutex.try_lock() {
@@ -276,8 +299,7 @@ impl Plugin for CurveSampler {
                     if (p - target_period).abs() < target_period * 0.4 || (p - target_period*0.5).abs() < p*0.1 || (p - target_period*2.0).abs() < p*0.1 {
                         period = p;
                     } else { period = target_period; }
-                    // Phase Offset logic: Start analysis 25% into the wave to keep jumps away from edges
-                    trigger_pos = crossings[0] - period * 0.75; 
+                    trigger_pos = crossings[0] - period; 
                 } else { period = target_period; }
 
                 if let Some(mut ema_p) = ema_period_mutex.try_lock() { *ema_p = *ema_p * 0.95 + period * 0.05; }
@@ -319,11 +341,13 @@ impl Plugin for CurveSampler {
                         let t = i as f32 / fft_size as f32;
                         let pos = trigger_pos + t * period;
                         let s = get_snapshot_cubic(pos, &snapshot);
-                        // No window for phase-locked data, but centered discontinuity
-                        fft_buf[i] = Complex { re: s - mean_val, im: 0.0 };
+                        let t_win = i as f32 / (fft_size - 1) as f32;
+                        let a0 = 0.35875; let a1 = 0.48829; let a2 = 0.14128; let a3 = 0.01168;
+                        let window = a0 - a1 * (2.0 * std::f32::consts::PI * t_win).cos() + a2 * (4.0 * std::f32::consts::PI * t_win).cos() - a3 * (6.0 * std::f32::consts::PI * t_win).cos();
+                        fft_buf[i] = Complex { re: (s - mean_val) * window, im: 0.0 };
                     }
                     fft.process(&mut fft_buf);
-                    current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 4.0 / fft_size as f32).collect();
+                    current_mags = fft_buf[..fft_size/2].iter().map(|c| c.norm() * 12.8 / fft_size as f32).collect();
                 }
 
                 if !current_mags.is_empty() {
@@ -341,6 +365,7 @@ impl Plugin for CurveSampler {
                         });
                     });
                     
+                    // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
@@ -525,20 +550,26 @@ impl Plugin for CurveSampler {
         
         let mut trigger = self.trigger_capture.load(Ordering::SeqCst);
         let mut w_idx = self.write_idx.load(Ordering::Relaxed);
-        if let Some(mut audio_buf) = self.audio_buffer.try_lock() {
-            for mut samples in buffer.iter_samples() {
-                let sample = *samples.iter_mut().next().unwrap_or(&mut 0.0);
-                let prev_idx = if w_idx == 0 { BUFFER_SIZE - 1 } else { w_idx - 1 };
-                let prev_sample = audio_buf[prev_idx];
-                audio_buf[w_idx] = sample;
-                if trigger && prev_sample <= 0.0 && sample > 0.0 {
-                    self.perform_extraction(sample_rate, &audio_buf, w_idx);
-                    self.trigger_capture.store(false, Ordering::SeqCst);
-                    trigger = false;
+        
+        // --- Sleep Mode Logic ---
+        // We only buffer samples if the GUI is open OR a capture was triggered.
+        if self.gui_is_open.load(Ordering::Relaxed) || trigger {
+            if let Some(mut audio_buf) = self.audio_buffer.try_lock() {
+                for mut samples in buffer.iter_samples() {
+                    let sample = *samples.iter_mut().next().unwrap_or(&mut 0.0);
+                    let prev_idx = if w_idx == 0 { BUFFER_SIZE - 1 } else { w_idx - 1 };
+                    let prev_sample = audio_buf[prev_idx];
+                    audio_buf[w_idx] = sample;
+                    if trigger && prev_sample <= 0.0 && sample > 0.0 {
+                        self.perform_extraction(sample_rate, &audio_buf, w_idx);
+                        self.trigger_capture.store(false, Ordering::SeqCst);
+                        trigger = false;
+                    }
+                    w_idx = (w_idx + 1) % BUFFER_SIZE;
                 }
-                w_idx = (w_idx + 1) % BUFFER_SIZE;
             }
         }
+        
         self.write_idx.store(w_idx, Ordering::Relaxed);
         ProcessStatus::Normal
     }

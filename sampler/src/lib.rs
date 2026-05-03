@@ -40,6 +40,13 @@ pub enum ChordPriority {
     CommonPeriod,
 }
 
+#[derive(Enum, PartialEq, Clone, Copy, Debug)]
+pub enum Theme {
+    Auto,
+    Dark,
+    Light,
+}
+
 /// A handle that sets an atomic boolean to false when dropped.
 /// Used to track GUI open/close state.
 struct GuiHandle {
@@ -81,7 +88,11 @@ struct CurveSampler {
 
 #[derive(Params)]
 struct CurveSamplerParams {
+    #[persist = "editor_state"]
     pub editor_state: Arc<EguiState>,
+
+    #[id = "theme"]
+    pub theme: EnumParam<Theme>,
 
     #[id = "domain"]
     pub domain: EnumParam<CurveDomain>,
@@ -129,6 +140,7 @@ impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
             editor_state: EguiState::from_size(700, 480),
+            theme: EnumParam::new("Theme", Theme::Auto),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -145,7 +157,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.41";
+    const VERSION: &'static str = "0.1.43";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -363,6 +375,12 @@ impl Plugin for CurveSampler {
                     }
                 }
 
+                match params.theme.value() {
+                    Theme::Auto => egui_ctx.set_visuals(if egui_ctx.style().visuals.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() }),
+                    Theme::Dark => egui_ctx.set_visuals(egui::Visuals::dark()),
+                    Theme::Light => egui_ctx.set_visuals(egui::Visuals::light()),
+                }
+
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.heading("Curve Sampler");
@@ -374,53 +392,82 @@ impl Plugin for CurveSampler {
                     
                     // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
-                    ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label("Tracking:");
-                            if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)").clicked() {
-                                setter.begin_set_parameter(&params.tracking_mode);
-                                setter.set_parameter(&params.tracking_mode, current_mode);
-                                setter.end_set_parameter(&params.tracking_mode);
-                            }
-                            if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual").clicked() {
-                                setter.begin_set_parameter(&params.tracking_mode);
-                                setter.set_parameter(&params.tracking_mode, current_mode);
-                                setter.end_set_parameter(&params.tracking_mode);
-                            }
-                            
-                            ui.add_space(20.0);
-                            if current_mode == TrackingMode::Auto {
-                                ui.label("Chord:");
-                                let mut pri = params.chord_priority.value();
-                                if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
-                                    setter.begin_set_parameter(&params.chord_priority);
-                                    setter.set_parameter(&params.chord_priority, pri);
-                                    setter.end_set_parameter(&params.chord_priority);
-                                }
-                                if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
-                                    setter.begin_set_parameter(&params.chord_priority);
-                                    setter.set_parameter(&params.chord_priority, pri);
-                                    setter.end_set_parameter(&params.chord_priority);
-                                }
-                            }
-                        });
-                        
-                        if current_mode == TrackingMode::Manual {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Freqs:");
-                                for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
-                                    let mut val = p.value();
-                                    if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
-                                        setter.begin_set_parameter(*p);
-                                        setter.set_parameter(*p, val);
-                                        setter.end_set_parameter(*p);
+                                ui.label("Tracking:");
+                                let mut auto_btn = ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)");
+                                auto_btn = auto_btn.on_hover_text("Use incoming MIDI notes for setting waveform length / reference frequency.");
+                                if auto_btn.clicked() {
+                                    setter.begin_set_parameter(&params.tracking_mode);
+                                    setter.set_parameter(&params.tracking_mode, current_mode);
+                                    setter.end_set_parameter(&params.tracking_mode);
+                                }
+                                
+                                let mut manual_btn = ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual");
+                                manual_btn = manual_btn.on_hover_text("Set up to three frequencies manually in the boxes below. Curve Sampler will try to find a practical least common multiple for cycle length if possible. 0Hz means 'ignore'.");
+                                if manual_btn.clicked() {
+                                    setter.begin_set_parameter(&params.tracking_mode);
+                                    setter.set_parameter(&params.tracking_mode, current_mode);
+                                    setter.end_set_parameter(&params.tracking_mode);
+                                }
+                                
+                                ui.add_space(20.0);
+                                if current_mode == TrackingMode::Auto {
+                                    ui.label("Chord:");
+                                    let mut pri = params.chord_priority.value();
+                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
+                                        setter.begin_set_parameter(&params.chord_priority);
+                                        setter.set_parameter(&params.chord_priority, pri);
+                                        setter.end_set_parameter(&params.chord_priority);
+                                    }
+                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
+                                        setter.begin_set_parameter(&params.chord_priority);
+                                        setter.set_parameter(&params.chord_priority, pri);
+                                        setter.end_set_parameter(&params.chord_priority);
                                     }
                                 }
                             });
-                        }
-                        
-                        let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
-                        ui.label(format!("Active Target: {:.2} Hz", display_freq));
+                            
+                            if current_mode == TrackingMode::Manual {
+                                ui.horizontal(|ui| {
+                                    ui.label("Freqs:");
+                                    for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
+                                        let mut val = p.value();
+                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
+                                            setter.begin_set_parameter(*p);
+                                            setter.set_parameter(*p, val);
+                                            setter.end_set_parameter(*p);
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
+                            ui.label(format!("Active Target: {:.2} Hz", display_freq));
+                        });
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            ui.vertical(|ui| {
+                                ui.label("Theme:");
+                                let mut current_theme = params.theme.value();
+                                if ui.selectable_value(&mut current_theme, Theme::Auto, "Auto").clicked() {
+                                    setter.begin_set_parameter(&params.theme);
+                                    setter.set_parameter(&params.theme, current_theme);
+                                    setter.end_set_parameter(&params.theme);
+                                }
+                                if ui.selectable_value(&mut current_theme, Theme::Dark, "Dark").clicked() {
+                                    setter.begin_set_parameter(&params.theme);
+                                    setter.set_parameter(&params.theme, current_theme);
+                                    setter.end_set_parameter(&params.theme);
+                                }
+                                if ui.selectable_value(&mut current_theme, Theme::Light, "Light").clicked() {
+                                    setter.begin_set_parameter(&params.theme);
+                                    setter.set_parameter(&params.theme, current_theme);
+                                    setter.end_set_parameter(&params.theme);
+                                }
+                            });
+                        });
                     });
 
                     ui.add_space(14.0);

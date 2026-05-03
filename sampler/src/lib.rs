@@ -157,7 +157,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.44";
+    const VERSION: &'static str = "0.1.45";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -259,26 +259,47 @@ impl Plugin for CurveSampler {
                 
                 let mut base_freq = 440.0;
                 if buffer_locked {
+                    let mut active_freqs = Vec::new();
                     if params.tracking_mode.value() == TrackingMode::Auto {
                         if let Some(notes) = active_midi_notes.try_lock() {
-                            if !notes.is_empty() {
-                                if params.chord_priority.value() == ChordPriority::LowestNote {
-                                    base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
-                                } else {
-                                    base_freq = 440.0 * 2.0_f32.powf((notes[0] as f32 - 69.0) / 12.0);
-                                    if notes.len() >= 2 {
-                                        let f2 = 440.0 * 2.0_f32.powf((notes[1] as f32 - 69.0) / 12.0);
-                                        let ratio = f2 / base_freq;
-                                        if (ratio - 1.5).abs() < 0.05 { base_freq /= 2.0; }
-                                        else if (ratio - 1.33).abs() < 0.05 { base_freq /= 3.0; }
-                                        else if (ratio - 1.25).abs() < 0.05 { base_freq /= 4.0; }
-                                    }
-                                }
-                            } else { base_freq = params.manual_freq1.value(); }
+                            for &note in notes.iter() {
+                                active_freqs.push(440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0));
+                            }
                         }
                     } else {
-                        base_freq = params.manual_freq1.value();
+                        for &f in &[params.manual_freq1.value(), params.manual_freq2.value(), params.manual_freq3.value()] {
+                            if f > 0.1 { active_freqs.push(f); }
+                        }
+                        active_freqs.sort_by(|a, b| a.partial_cmp(b).unwrap());
                     }
+
+                    if !active_freqs.is_empty() {
+                        base_freq = active_freqs[0];
+                        if params.chord_priority.value() == ChordPriority::CommonPeriod && active_freqs.len() >= 2 {
+                            let f1 = active_freqs[0];
+                            let f2 = active_freqs[1];
+                            let ratio = f2 / f1;
+                            
+                            // Check common musical ratios for a shared period
+                            if (ratio - 1.5).abs() < 0.02 { base_freq = f1 / 2.0; }      // Perfect Fifth (3:2) -> GCD is f1/2
+                            else if (ratio - 2.0).abs() < 0.02 { base_freq = f1; }       // Octave (2:1)
+                            else if (ratio - 1.333).abs() < 0.02 { base_freq = f1 / 3.0; } // Perfect Fourth (4:3) -> GCD is f1/3
+                            else if (ratio - 1.25).abs() < 0.02 { base_freq = f1 / 4.0; }  // Major Third (5:4) -> GCD is f1/4
+                            else if (ratio - 1.2).abs() < 0.02 { base_freq = f1 / 5.0; }   // Minor Third (6:5) -> GCD is f1/5
+                            
+                            // For three-note chords, check the third note against the new base
+                            if active_freqs.len() >= 3 {
+                                let f3 = active_freqs[2];
+                                let ratio3 = f3 / base_freq;
+                                let r_round = ratio3.round();
+                                if (ratio3 - r_round).abs() > 0.05 {
+                                    // If the 3rd note doesn't fit the base, try a safer GCD or stick to lowest
+                                    // For now we just stay with the 2-note base or revert to lowest if it's very messy
+                                }
+                            }
+                        }
+                    }
+
                     target_freq_atomic.store(base_freq.to_bits(), Ordering::Relaxed);
                     
                     let target_period = (sample_rate / base_freq).clamp(8.0, 4000.0);

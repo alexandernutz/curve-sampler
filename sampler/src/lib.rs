@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.49";
+    const VERSION: &'static str = "0.1.50";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -429,7 +429,7 @@ impl Plugin for CurveSampler {
                     
                     // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
-                    ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Tracking:");
@@ -440,7 +440,7 @@ impl Plugin for CurveSampler {
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
                                 }
-                                
+
                                 let mut manual_btn = ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual");
                                 manual_btn = manual_btn.on_hover_text("Set up to three frequencies manually in the boxes below. Curve Sampler will try to find a practical least common multiple for cycle length if possible. 0Hz means 'ignore'.");
                                 if manual_btn.clicked() {
@@ -448,7 +448,7 @@ impl Plugin for CurveSampler {
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
                                 }
-                                
+
                                 ui.add_space(20.0);
                                 if current_mode == TrackingMode::Auto {
                                     ui.label("Chord:");
@@ -465,7 +465,7 @@ impl Plugin for CurveSampler {
                                     }
                                 }
                             });
-                            
+
                             if current_mode == TrackingMode::Manual {
                                 ui.horizontal(|ui| {
                                     ui.label("Freqs:");
@@ -479,11 +479,12 @@ impl Plugin for CurveSampler {
                                     }
                                 });
                             }
-                            
+
                             let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
                             ui.label(format!("Active Target: {:.2} Hz", display_freq)).on_hover_text(target_reason);
-                            });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        });
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                             ui.horizontal(|ui| {
                                 let mut current_theme = params.theme.value();
                                 if ui.radio_value(&mut current_theme, Theme::Light, "Light").clicked() {
@@ -505,6 +506,7 @@ impl Plugin for CurveSampler {
                             });
                         });
                     });
+
 
                     ui.add_space(14.0);
 

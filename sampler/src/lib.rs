@@ -145,7 +145,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.40";
+    const VERSION: &'static str = "0.1.41";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -370,10 +370,11 @@ impl Plugin for CurveSampler {
                             ui.label(format!("v{}", Self::VERSION));
                         });
                     });
+                    ui.add_space(12.0);
                     
                     // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
-                    ui.group(|ui| {
+                    ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             ui.label("Tracking:");
                             if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)").clicked() {
@@ -422,10 +423,10 @@ impl Plugin for CurveSampler {
                         ui.label(format!("Active Target: {:.2} Hz", display_freq));
                     });
 
-                    ui.add_space(10.0);
+                    ui.add_space(14.0);
 
                     ui.columns(2, |columns| {
-                        columns[0].vertical_centered(|ui| {
+                        columns[0].vertical(|ui| {
                             ui.label("Oscilloscope (Locked)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
@@ -444,7 +445,7 @@ impl Plugin for CurveSampler {
                             }
                         });
 
-                        columns[1].vertical_centered(|ui| {
+                        columns[1].vertical(|ui| {
                             ui.label("Spectrum (Stable dB)");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);

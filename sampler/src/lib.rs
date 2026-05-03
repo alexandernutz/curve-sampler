@@ -8,6 +8,10 @@ use std::io::Write;
 use curve_core::bezier::{fit_bezier, fit_bezier_interp, fit_bezier_adaptive};
 use curve_core::zebra_format;
 
+mod theme;
+
+pub use theme::Theme;
+
 const BUFFER_SIZE: usize = 32768;
 
 fn log_to_file(msg: &str) {
@@ -38,13 +42,6 @@ pub enum TrackingMode {
 pub enum ChordPriority {
     LowestNote,
     CommonPeriod,
-}
-
-#[derive(Enum, PartialEq, Clone, Copy, Debug)]
-pub enum Theme {
-    Auto,
-    Dark,
-    Light,
 }
 
 /// A handle that sets an atomic boolean to false when dropped.
@@ -157,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.46";
+    const VERSION: &'static str = "0.1.49";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -418,13 +415,10 @@ impl Plugin for CurveSampler {
                     }
                 }
 
-                match params.theme.value() {
-                    Theme::Auto => egui_ctx.set_visuals(if egui_ctx.style().visuals.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() }),
-                    Theme::Dark => egui_ctx.set_visuals(egui::Visuals::dark()),
-                    Theme::Light => egui_ctx.set_visuals(egui::Visuals::light()),
-                }
+                theme::apply(egui_ctx, params.theme.value());
 
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
+
                     ui.horizontal(|ui| {
                         ui.heading("Curve Sampler");
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

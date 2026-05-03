@@ -3,6 +3,7 @@ mod audio;
 mod curve_editor;
 mod curve_ops;
 mod midi;
+mod theme;
 pub mod waveforms;
 
 pub use app::App;

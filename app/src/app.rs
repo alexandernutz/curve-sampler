@@ -19,6 +19,7 @@ pub struct App {
     volume: f32,
     playing: bool,
     play_as: PlayAs,
+    theme: crate::theme::Theme,
     /// All curve states; `history[history_idx]` is the current state.
     history: Vec<BezierCurve>,
     history_idx: usize,
@@ -36,6 +37,7 @@ impl App {
             volume: 0.7,
             playing: false,
             play_as: PlayAs::Waveform,
+            theme: crate::theme::Theme::Auto,
             history: Vec::new(),
             history_idx: 0,
         }
@@ -44,6 +46,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        crate::theme::apply(ctx, self.theme);
+
         // Keyboard shortcuts — suppressed while any text widget has focus.
         if !ctx.wants_keyboard_input() {
             let (ctrl_z, ctrl_y, ctrl_shift_z) = ctx.input(|i| (
@@ -216,6 +220,13 @@ impl eframe::App for App {
             ui.separator();
 
             ui.label(&self.status);
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("Theme:");
+                ui.radio_value(&mut self.theme, crate::theme::Theme::Auto, "Auto");
+                ui.radio_value(&mut self.theme, crate::theme::Theme::Dark, "Dark");
+                ui.radio_value(&mut self.theme, crate::theme::Theme::Light, "Light");
+            });
         }); // SidePanel
 
         CentralPanel::default().show(ctx, |ui| match &self.curve {

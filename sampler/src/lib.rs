@@ -157,7 +157,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.45";
+    const VERSION: &'static str = "0.1.46";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -258,6 +258,7 @@ impl Plugin for CurveSampler {
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
                 
                 let mut base_freq = 440.0;
+                let mut target_reason = "Manual / Single note".to_string();
                 if buffer_locked {
                     let mut active_freqs = Vec::new();
                     if params.tracking_mode.value() == TrackingMode::Auto {
@@ -266,35 +267,56 @@ impl Plugin for CurveSampler {
                                 active_freqs.push(440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0));
                             }
                         }
+                        if !active_freqs.is_empty() { target_reason = "MIDI input".to_string(); }
                     } else {
                         for &f in &[params.manual_freq1.value(), params.manual_freq2.value(), params.manual_freq3.value()] {
                             if f > 0.1 { active_freqs.push(f); }
                         }
                         active_freqs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        if !active_freqs.is_empty() { target_reason = "Manual frequency".to_string(); }
                     }
 
                     if !active_freqs.is_empty() {
                         base_freq = active_freqs[0];
-                        if params.chord_priority.value() == ChordPriority::CommonPeriod && active_freqs.len() >= 2 {
-                            let f1 = active_freqs[0];
-                            let f2 = active_freqs[1];
-                            let ratio = f2 / f1;
-                            
-                            // Check common musical ratios for a shared period
-                            if (ratio - 1.5).abs() < 0.02 { base_freq = f1 / 2.0; }      // Perfect Fifth (3:2) -> GCD is f1/2
-                            else if (ratio - 2.0).abs() < 0.02 { base_freq = f1; }       // Octave (2:1)
-                            else if (ratio - 1.333).abs() < 0.02 { base_freq = f1 / 3.0; } // Perfect Fourth (4:3) -> GCD is f1/3
-                            else if (ratio - 1.25).abs() < 0.02 { base_freq = f1 / 4.0; }  // Major Third (5:4) -> GCD is f1/4
-                            else if (ratio - 1.2).abs() < 0.02 { base_freq = f1 / 5.0; }   // Minor Third (6:5) -> GCD is f1/5
-                            
-                            // For three-note chords, check the third note against the new base
-                            if active_freqs.len() >= 3 {
-                                let f3 = active_freqs[2];
-                                let ratio3 = f3 / base_freq;
-                                let r_round = ratio3.round();
-                                if (ratio3 - r_round).abs() > 0.05 {
-                                    // If the 3rd note doesn't fit the base, try a safer GCD or stick to lowest
-                                    // For now we just stay with the 2-note base or revert to lowest if it's very messy
+                        if active_freqs.len() >= 2 {
+                            if params.chord_priority.value() == ChordPriority::LowestNote {
+                                target_reason = format!("Lowest note of {} active freqs", active_freqs.len());
+                            } else {
+                                let f1 = active_freqs[0];
+                                let f2 = active_freqs[1];
+                                let ratio = f2 / f1;
+                                
+                                let mut matched = true;
+                                // Check common musical ratios for a shared period
+                                if (ratio - 1.5).abs() < 0.02 { 
+                                    base_freq = f1 / 2.0; 
+                                    target_reason = "Common period (LCM of 3:2 fifth)".to_string();
+                                } else if (ratio - 2.0).abs() < 0.02 { 
+                                    base_freq = f1; 
+                                    target_reason = "Common period (Octave)".to_string();
+                                } else if (ratio - 1.333).abs() < 0.02 { 
+                                    base_freq = f1 / 3.0; 
+                                    target_reason = "Common period (LCM of 4:3 fourth)".to_string();
+                                } else if (ratio - 1.25).abs() < 0.02 { 
+                                    base_freq = f1 / 4.0; 
+                                    target_reason = "Common period (LCM of 5:4 major third)".to_string();
+                                } else if (ratio - 1.2).abs() < 0.02 { 
+                                    base_freq = f1 / 5.0; 
+                                    target_reason = "Common period (LCM of 6:5 minor third)".to_string();
+                                } else {
+                                    matched = false;
+                                    target_reason = "Lowest note (fallback, complex ratio)".to_string();
+                                }
+                                
+                                if matched && active_freqs.len() >= 3 {
+                                    let f3 = active_freqs[2];
+                                    let ratio3 = f3 / base_freq;
+                                    let r_round = ratio3.round();
+                                    if (ratio3 - r_round).abs() > 0.05 {
+                                        // target_reason remains the 2-note LCM or fallback
+                                    } else {
+                                        target_reason = format!("Common period (LCM of 3-note chord)");
+                                    }
                                 }
                             }
                         }
@@ -465,9 +487,8 @@ impl Plugin for CurveSampler {
                             }
                             
                             let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
-                            ui.label(format!("Active Target: {:.2} Hz", display_freq));
-                        });
-
+                            ui.label(format!("Active Target: {:.2} Hz", display_freq)).on_hover_text(target_reason);
+                            });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.horizontal(|ui| {
                                 let mut current_theme = params.theme.value();

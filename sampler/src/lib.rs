@@ -128,7 +128,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 650),
+            editor_state: EguiState::from_size(700, 480),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -145,7 +145,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.39";
+    const VERSION: &'static str = "0.1.40";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -366,15 +366,6 @@ impl Plugin for CurveSampler {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.heading("Curve Sampler");
-                        ui.add_space(8.0);
-                        let help_btn = ui.small_button(" (?) ");
-                        help_btn.on_hover_text(
-                            "Setup Guide:\n\
-                             1. Route MIDI and Audio into Curve Sampler.\n\
-                             2. In Bitwig, just place after your synth.\n\
-                             3. For Serum/other synths, use an Instrument Layer or Note Receiver to ensure MIDI reaches this plugin.\n\
-                             4. 'Locked' osc will show when MIDI or Manual freq matches input audio."
-                        );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(format!("v{}", Self::VERSION));
                         });
@@ -494,11 +485,14 @@ impl Plugin for CurveSampler {
                     });
 
                     ui.add_space(10.0);
-                    ui.label("Curve Clipboard String:");
+                    ui.columns(2, |columns| {
+                        columns[0].label("Curve Clipboard String:");
+                        columns[1].label("Stored Curve Preview:");
+                    });
+
                     ui.columns(2, |columns| {
                         if let Some(mut text) = captured.try_lock() {
                             // Column 0: Multiline text edit
-                            columns[0].add_space(5.0);
                             egui::ScrollArea::vertical()
                                 .id_salt("log_scroll")
                                 .max_height(140.0)
@@ -517,33 +511,30 @@ impl Plugin for CurveSampler {
                         }
 
                         // Column 1: Curve Preview
-                        columns[1].vertical_centered(|ui| {
-                            ui.label("Stored Curve Preview");
-                            let rect = ui.allocate_space(egui::vec2(ui.available_width(), 140.0)).1;
-                            let painter = ui.painter_at(rect);
-                            painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
-                            if let Some(text) = captured.try_lock() {
-                                if let Ok(curve) = curve_core::zebra_format::parse(&text) {
-                                    let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
-                                    let mut last_pos: Option<egui::Pos2> = None;
-                                    let preview_steps = 512;
-                                    for i in 0..=preview_steps {
-                                        let t = i as f32 / preview_steps as f32;
-                                        let y = curve.eval(t);
-                                        let px = rect.left() + t * rect.width();
-                                        let py = rect.bottom() - y * rect.height();
-                                        let pos = egui::pos2(px, py);
-                                        if let Some(prev) = last_pos {
-                                            let color = if is_spec { egui::Color32::from_rgb(0, 180, 255) } else { egui::Color32::YELLOW };
-                                            painter.line_segment([prev, pos], (1.2, color));
-                                        }
-                                        last_pos = Some(pos);
+                        let rect = columns[1].allocate_space(egui::vec2(columns[1].available_width(), 140.0)).1;
+                        let painter = columns[1].painter_at(rect);
+                        painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
+                        if let Some(text) = captured.try_lock() {
+                            if let Ok(curve) = curve_core::zebra_format::parse(&text) {
+                                let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
+                                let mut last_pos: Option<egui::Pos2> = None;
+                                let preview_steps = 512;
+                                for i in 0..=preview_steps {
+                                    let t = i as f32 / preview_steps as f32;
+                                    let y = curve.eval(t);
+                                    let px = rect.left() + t * rect.width();
+                                    let py = rect.bottom() - y * rect.height();
+                                    let pos = egui::pos2(px, py);
+                                    if let Some(prev) = last_pos {
+                                        let color = if is_spec { egui::Color32::from_rgb(0, 180, 255) } else { egui::Color32::YELLOW };
+                                        painter.line_segment([prev, pos], (1.2, color));
                                     }
-                                } else {
-                                    painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
+                                    last_pos = Some(pos);
                                 }
+                            } else {
+                                painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
                             }
-                        });
+                        }
                     });
                 });
                 egui_ctx.request_repaint();

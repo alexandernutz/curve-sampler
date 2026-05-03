@@ -42,13 +42,21 @@ cat > local_bundle/CurveSampler.clap/Contents/Info.plist <<EOF
 </plist>
 EOF
 
-# 3. Build
-cargo build -p curve-sampler
+# 3. Build Plugin
+cargo build --release -p curve-sampler
 
-# 4. Install
-cp target/debug/libcurve_sampler.dylib local_bundle/CurveSampler.clap/Contents/MacOS/CurveSampler
+# 4. Install Locally
+cp target/release/libcurve_sampler.dylib local_bundle/CurveSampler.clap/Contents/MacOS/CurveSampler
 rm -rf ~/Library/Audio/Plug-Ins/CLAP/CurveSampler.clap
 cp -R local_bundle/CurveSampler.clap ~/Library/Audio/Plug-Ins/CLAP/
 touch ~/Library/Audio/Plug-Ins/CLAP/CurveSampler.clap
 
-echo "Done! Running version: $VERSION"
+# 5. Build Web (Curve Jumbler)
+echo "Building Curve Jumbler (WASM)..."
+wasm-pack build --target web --release
+mkdir -p dist
+cp index.html dist/
+cp -r pkg dist/
+
+echo "Done! Local version: $VERSION"
+echo "Web build ready in /dist"

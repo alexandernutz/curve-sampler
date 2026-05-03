@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.50";
+    const VERSION: &'static str = "0.1.51";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -612,9 +612,9 @@ impl Plugin for CurveSampler {
                                     let py = rect.bottom() - y * rect.height();
                                     let pos = egui::pos2(px, py);
                                     if let Some(prev) = last_pos {
-                                        let color = if is_spec { egui::Color32::from_rgb(0, 180, 255) } else { egui::Color32::YELLOW };
-                                        painter.line_segment([prev, pos], (1.2, color));
+                                        painter.line_segment([prev, pos], (1.2, columns[1].visuals().text_color()));
                                     }
+
                                     last_pos = Some(pos);
                                 }
                             } else {

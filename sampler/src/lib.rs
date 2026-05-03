@@ -157,7 +157,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.43";
+    const VERSION: &'static str = "0.1.44";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -447,25 +447,25 @@ impl Plugin for CurveSampler {
                             ui.label(format!("Active Target: {:.2} Hz", display_freq));
                         });
 
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            ui.vertical(|ui| {
-                                ui.label("Theme:");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.horizontal(|ui| {
                                 let mut current_theme = params.theme.value();
-                                if ui.selectable_value(&mut current_theme, Theme::Auto, "Auto").clicked() {
+                                if ui.radio_value(&mut current_theme, Theme::Light, "Light").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);
                                 }
-                                if ui.selectable_value(&mut current_theme, Theme::Dark, "Dark").clicked() {
+                                if ui.radio_value(&mut current_theme, Theme::Dark, "Dark").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);
                                 }
-                                if ui.selectable_value(&mut current_theme, Theme::Light, "Light").clicked() {
+                                if ui.radio_value(&mut current_theme, Theme::Auto, "Auto").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);
                                 }
+                                ui.label("Theme:");
                             });
                         });
                     });

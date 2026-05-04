@@ -77,7 +77,7 @@ I guess we'll all have to see where this goes and hopefully be responsible about
 
 ## Licensing
 
-**Source Code:** MIT (or ISC)
+**Source Code:** MIT 
 
 **Plugin Binaries (in releases):**
 - **CLAP:** MIT

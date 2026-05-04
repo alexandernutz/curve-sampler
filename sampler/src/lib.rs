@@ -593,15 +593,22 @@ impl Plugin for CurveSampler {
                                         egui::TextEdit::multiline(&mut *text)
                                             .font(egui::TextStyle::Monospace)
                                             .desired_width(f32::INFINITY)
+                                            .desired_rows(6)
                                     );
                                 });
                             columns[0].add_space(10.0);
-                            if columns[0].button("📋 Copy to Clipboard").clicked() { 
-                                egui_ctx.copy_text(text.clone()); 
+                            if columns[0].button("📋 Copy to Clipboard").clicked() {
+                                egui_ctx.copy_text(text.clone());
                             }
                         } else {
                             // Empty state to keep layout stable
-                            columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0));
+                            egui::ScrollArea::vertical()
+                                .id_salt("log_scroll")
+                                .max_height(140.0)
+                                .min_scrolled_height(140.0)
+                                .show(&mut columns[0], |ui| {
+                                    ui.allocate_space(egui::vec2(ui.available_width(), 140.0 - 20.0));
+                                });
                             columns[0].add_space(10.0);
                             columns[0].add_enabled(false, egui::Button::new("📋 Copy to Clipboard"));
                         }

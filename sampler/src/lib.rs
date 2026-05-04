@@ -136,7 +136,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 580),
+            editor_state: EguiState::from_size(700, 620),
             theme: EnumParam::new("Theme", Theme::Auto),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.56";
+    const VERSION: &'static str = "0.1.58";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -582,21 +582,33 @@ impl Plugin for CurveSampler {
                     });
 
                     ui.columns(2, |columns| {
-                        // Force consistent height: 140px text area + 10px space + button
+                        // Force consistent height: 140px text area (with scroll) + 10px space + button
                         if let Some(mut text) = captured.try_lock() {
-                            // Column 0: Multiline text edit with forced height
-                            let rect = columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0)).1;
-                            let mut text_edit = egui::TextEdit::multiline(&mut *text)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(f32::INFINITY);
-                            columns[0].put(rect, text_edit);
+                            // Column 0: Multiline text edit with scrollbar for overflow
+                            egui::ScrollArea::vertical()
+                                .id_salt("clipboard_scroll")
+                                .max_height(140.0)
+                                .auto_shrink([false; 2])
+                                .show(&mut columns[0], |ui| {
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut *text)
+                                            .font(egui::TextStyle::Monospace)
+                                            .desired_width(f32::INFINITY)
+                                    );
+                                });
                             columns[0].add_space(10.0);
                             if columns[0].button("📋 Copy to Clipboard").clicked() {
                                 egui_ctx.copy_text(text.clone());
                             }
                         } else {
-                            // Empty state: same height allocation
-                            columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0));
+                            // Empty state: same height allocation with ScrollArea
+                            egui::ScrollArea::vertical()
+                                .id_salt("clipboard_scroll")
+                                .max_height(140.0)
+                                .auto_shrink([false; 2])
+                                .show(&mut columns[0], |ui| {
+                                    ui.allocate_space(egui::vec2(ui.available_width(), 0.0));
+                                });
                             columns[0].add_space(10.0);
                             columns[0].add_enabled(false, egui::Button::new("📋 Copy to Clipboard"));
                         }

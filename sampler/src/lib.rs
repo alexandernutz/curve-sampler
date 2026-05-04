@@ -123,7 +123,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            theme: EnumParam::new("Theme", ThemeMode::Dark),
+            theme: EnumParam::new("Theme", ThemeMode::Auto),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -140,7 +140,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.76";
+    const VERSION: &'static str = "0.1.77";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -488,6 +488,11 @@ impl Plugin for CurveSampler {
                                     setter.end_set_parameter(&params.theme);
                                 }
                                 if ui.radio_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
+                                    setter.begin_set_parameter(&params.theme);
+                                    setter.set_parameter(&params.theme, current_theme);
+                                    setter.end_set_parameter(&params.theme);
+                                }
+                                if ui.radio_value(&mut current_theme, ThemeMode::Auto, "Auto").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);

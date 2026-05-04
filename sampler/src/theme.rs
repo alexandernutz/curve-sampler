@@ -2,6 +2,8 @@ use nih_plug::prelude::Enum;
 
 #[derive(Debug, PartialEq, Clone, Copy, Enum)]
 pub enum ThemeMode {
+    #[id = "auto"]
+    Auto,
     #[id = "dark"]
     Dark,
     #[id = "light"]
@@ -65,6 +67,7 @@ pub mod light {
 
 pub fn apply(ctx: &nih_plug_egui::egui::Context, mode: ThemeMode) {
     match mode {
+        ThemeMode::Auto => ctx.set_theme(nih_plug_egui::egui::ThemePreference::System),
         ThemeMode::Dark => ctx.set_theme(nih_plug_egui::egui::ThemePreference::Dark),
         ThemeMode::Light => ctx.set_theme(nih_plug_egui::egui::ThemePreference::Light),
     }

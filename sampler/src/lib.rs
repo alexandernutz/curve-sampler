@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.53";
+    const VERSION: &'static str = "0.1.54";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -433,17 +433,19 @@ impl Plugin for CurveSampler {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Tracking:");
-                                let mut auto_btn = ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)");
-                                auto_btn = auto_btn.on_hover_text("Use incoming MIDI notes for setting waveform length / reference frequency.");
-                                if auto_btn.clicked() {
+                                if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)")
+                                    .on_hover_text("Sets capture length based on incoming MIDI notes.")
+                                    .clicked() 
+                                {
                                     setter.begin_set_parameter(&params.tracking_mode);
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
                                 }
 
-                                let mut manual_btn = ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual");
-                                manual_btn = manual_btn.on_hover_text("Set up to three frequencies manually in the boxes below. Curve Sampler will try to find a practical least common multiple for cycle length if possible. 0Hz means 'ignore'.");
-                                if manual_btn.clicked() {
+                                if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual")
+                                    .on_hover_text("Sets capture length based on the manual frequency boxes below.")
+                                    .clicked() 
+                                {
                                     setter.begin_set_parameter(&params.tracking_mode);
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
@@ -455,7 +457,7 @@ impl Plugin for CurveSampler {
                                     ui.label("Chord:");
                                     let mut pri = params.chord_priority.value();
                                     if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest")
-                                        .on_hover_text("Capture based on the lowest active note/frequency.")
+                                        .on_hover_text("Captures based on the lowest incoming MIDI note.")
                                         .clicked() 
                                     {
                                         setter.begin_set_parameter(&params.chord_priority);
@@ -463,7 +465,7 @@ impl Plugin for CurveSampler {
                                         setter.end_set_parameter(&params.chord_priority);
                                     }
                                     if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common")
-                                        .on_hover_text("Identify musical ratios between notes and find a shared period (LCM) to capture the full chordal cycle.")
+                                        .on_hover_text("Captures the full chord cycle by finding a shared period (LCM). Note: The resulting curve will have a lower root pitch than the individual notes.")
                                         .clicked() 
                                     {
                                         setter.begin_set_parameter(&params.chord_priority);

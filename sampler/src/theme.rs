@@ -11,8 +11,19 @@ pub enum Theme {
 pub fn apply(ctx: &egui::Context, theme: Theme) {
     match theme {
         Theme::Auto => {
-            // egui follows system preference by default if we don't override it,
-            // but we can force it to stay in sync or apply custom tweaks here.
+            // Detect system theme from egui context
+            let is_dark = ctx.style().visuals.dark_mode;
+            // We can also check system_theme() if available in this egui version
+            if let Some(system_theme) = ctx.system_theme() {
+                match system_theme {
+                    egui::Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
+                    egui::Theme::Light => ctx.set_visuals(egui::Visuals::light()),
+                }
+            } else {
+                // Fallback to whatever egui thinks is right
+                if is_dark { ctx.set_visuals(egui::Visuals::dark()); }
+                else { ctx.set_visuals(egui::Visuals::light()); }
+            }
         }
         Theme::Dark => {
             ctx.set_visuals(egui::Visuals::dark());
@@ -21,9 +32,4 @@ pub fn apply(ctx: &egui::Context, theme: Theme) {
             ctx.set_visuals(egui::Visuals::light());
         }
     }
-    
-    // This is where you can add your custom color schemes later!
-    // let mut visuals = ctx.style().visuals.clone();
-    // visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 180, 255);
-    // ctx.set_visuals(visuals);
 }

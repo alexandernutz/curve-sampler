@@ -136,7 +136,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 520),
+            editor_state: EguiState::from_size(700, 580),
             theme: EnumParam::new("Theme", Theme::Auto),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
@@ -582,33 +582,21 @@ impl Plugin for CurveSampler {
                     });
 
                     ui.columns(2, |columns| {
+                        // Force consistent height: 140px text area + 10px space + button
                         if let Some(mut text) = captured.try_lock() {
-                            // Column 0: Multiline text edit
-                            egui::ScrollArea::vertical()
-                                .id_salt("log_scroll")
-                                .max_height(140.0)
-                                .min_scrolled_height(140.0) // Force alignment
-                                .show(&mut columns[0], |ui| {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut *text)
-                                            .font(egui::TextStyle::Monospace)
-                                            .desired_width(f32::INFINITY)
-                                            .desired_rows(6)
-                                    );
-                                });
+                            // Column 0: Multiline text edit with forced height
+                            let rect = columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0)).1;
+                            let mut text_edit = egui::TextEdit::multiline(&mut *text)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(f32::INFINITY);
+                            columns[0].put(rect, text_edit);
                             columns[0].add_space(10.0);
                             if columns[0].button("📋 Copy to Clipboard").clicked() {
                                 egui_ctx.copy_text(text.clone());
                             }
                         } else {
-                            // Empty state to keep layout stable
-                            egui::ScrollArea::vertical()
-                                .id_salt("log_scroll")
-                                .max_height(140.0)
-                                .min_scrolled_height(140.0)
-                                .show(&mut columns[0], |ui| {
-                                    ui.allocate_space(egui::vec2(ui.available_width(), 140.0 - 20.0));
-                                });
+                            // Empty state: same height allocation
+                            columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0));
                             columns[0].add_space(10.0);
                             columns[0].add_enabled(false, egui::Button::new("📋 Copy to Clipboard"));
                         }
@@ -640,27 +628,6 @@ impl Plugin for CurveSampler {
                         }
                     });
                 });
-
-                // Draw resize handle overlay at bottom-right corner
-                let screen_rect = egui_ctx.screen_rect();
-                let handle_size = 16.0;
-                let handle_rect = egui::Rect::from_min_size(
-                    egui::pos2(screen_rect.right() - handle_size, screen_rect.bottom() - handle_size),
-                    egui::vec2(handle_size, handle_size)
-                );
-                let painter = egui_ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("resize_handle")));
-                let handle_color = egui::Color32::from_gray(120);
-                painter.line_segment(
-                    [egui::pos2(handle_rect.left() + 8.0, handle_rect.bottom() - 3.0),
-                     egui::pos2(handle_rect.right() - 3.0, handle_rect.top() + 8.0)],
-                    (1.0, handle_color)
-                );
-                painter.line_segment(
-                    [egui::pos2(handle_rect.left() + 12.0, handle_rect.bottom() - 3.0),
-                     egui::pos2(handle_rect.right() - 3.0, handle_rect.top() + 4.0)],
-                    (1.0, handle_color)
-                );
-
                 egui_ctx.request_repaint();
             },
         )

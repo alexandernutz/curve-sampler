@@ -75,7 +75,16 @@ Musing: This was a new experience, it's a bit like acting as the manager of a pr
 AI hopefully just allows me to operate on this more abstract level, while still doing it "all on my own". 
 I guess we'll all have to see where this goes and hopefully be responsible about it ...
 
+## Licensing
+
+**Source Code:** MIT (or ISC)
+
+**Plugin Binaries (in releases):**
+- **CLAP:** MIT
+- **VST3:** GPLv3
+
+The VST3 SDK itself is dual-licensed (GPLv3 or proprietary Steinberg license). Since this project is open-source, the GPLv3 path applies—no additional licensing agreement is needed. For end users loading the plugin in a DAW, this is a practical non-issue: you can use the plugin freely, and GPL vs MIT makes no difference if you're not redistributing modified binary code.
+
 ---
 
-**License:** MIT
-**Version:** 0.1.38
+**Version:** 0.1.77

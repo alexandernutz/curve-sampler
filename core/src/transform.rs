@@ -190,7 +190,7 @@ pub fn geometry_to_spectrum(curve: &BezierCurve, fft_size: usize) -> Result<Bezi
     Ok(new_curve)
 }
 
-fn sample_log_freq(curve: &BezierCurve, num_harmonics: usize) -> Vec<f32> {
+pub fn sample_log_freq(curve: &BezierCurve, num_harmonics: usize) -> Vec<f32> {
     (0..num_harmonics)
         .map(|k| {
             if k == 0 { 0.0 }

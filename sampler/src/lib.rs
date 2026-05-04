@@ -44,6 +44,13 @@ pub enum ChordPriority {
     CommonPeriod,
 }
 
+#[derive(Enum, PartialEq, Clone, Copy, Debug)]
+pub enum WindowSize {
+    Small,
+    Medium,
+    Large,
+}
+
 /// A handle that sets an atomic boolean to false when dropped.
 /// Used to track GUI open/close state.
 struct GuiHandle {
@@ -85,11 +92,14 @@ struct CurveSampler {
 
 #[derive(Params)]
 struct CurveSamplerParams {
-    #[persist = "editor_state_v5"]
+    #[persist = "editor_state_v7"]
     pub editor_state: Arc<EguiState>,
 
     #[id = "theme"]
     pub theme: EnumParam<Theme>,
+
+    #[id = "win_size"]
+    pub window_size: EnumParam<WindowSize>,
 
     #[id = "domain"]
     pub domain: EnumParam<CurveDomain>,
@@ -135,9 +145,16 @@ impl Default for CurveSampler {
 
 impl Default for CurveSamplerParams {
     fn default() -> Self {
+        // S: 600×450, M: 700×500, L: 900×600
+        let (w, h) = match WindowSize::Medium {
+            WindowSize::Small => (600, 450),
+            WindowSize::Medium => (700, 500),
+            WindowSize::Large => (900, 600),
+        };
         Self {
-            editor_state: EguiState::from_size(700, 500),
+            editor_state: EguiState::from_size(w, h),
             theme: EnumParam::new("Theme", Theme::Auto),
+            window_size: EnumParam::new("Window", WindowSize::Medium),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -154,7 +171,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.64";
+    const VERSION: &'static str = "0.1.66";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -512,6 +529,25 @@ impl Plugin for CurveSampler {
                                     setter.end_set_parameter(&params.theme);
                                 }
                                 ui.label("Theme:");
+                            });
+                            ui.horizontal(|ui| {
+                                let mut current_size = params.window_size.value();
+                                if ui.radio_value(&mut current_size, WindowSize::Small, "S").clicked() {
+                                    setter.begin_set_parameter(&params.window_size);
+                                    setter.set_parameter(&params.window_size, current_size);
+                                    setter.end_set_parameter(&params.window_size);
+                                }
+                                if ui.radio_value(&mut current_size, WindowSize::Medium, "M").clicked() {
+                                    setter.begin_set_parameter(&params.window_size);
+                                    setter.set_parameter(&params.window_size, current_size);
+                                    setter.end_set_parameter(&params.window_size);
+                                }
+                                if ui.radio_value(&mut current_size, WindowSize::Large, "L").clicked() {
+                                    setter.begin_set_parameter(&params.window_size);
+                                    setter.set_parameter(&params.window_size, current_size);
+                                    setter.end_set_parameter(&params.window_size);
+                                }
+                                ui.label("Window:");
                             });
                         });
                     });

@@ -85,7 +85,7 @@ struct CurveSampler {
 
 #[derive(Params)]
 struct CurveSamplerParams {
-    #[persist = "editor_state_v4"]
+    #[persist = "editor_state_v5"]
     pub editor_state: Arc<EguiState>,
 
     #[id = "theme"]
@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.63";
+    const VERSION: &'static str = "0.1.64";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -418,6 +418,10 @@ impl Plugin for CurveSampler {
                 theme::apply(egui_ctx, params.theme.value());
 
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("main_scroll")
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
 
                     ui.horizontal(|ui| {
                         ui.heading("Curve Sampler");
@@ -638,6 +642,7 @@ impl Plugin for CurveSampler {
                                 painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
                             }
                         }
+                    });
                     });
                 });
                 egui_ctx.request_repaint();

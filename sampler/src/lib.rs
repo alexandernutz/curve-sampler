@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.51";
+    const VERSION: &'static str = "0.1.53";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -448,26 +448,29 @@ impl Plugin for CurveSampler {
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
                                 }
+                            });
 
-                                ui.add_space(20.0);
+                            ui.horizontal(|ui| {
                                 if current_mode == TrackingMode::Auto {
                                     ui.label("Chord:");
                                     let mut pri = params.chord_priority.value();
-                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
+                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest")
+                                        .on_hover_text("Capture based on the lowest active note/frequency.")
+                                        .clicked() 
+                                    {
                                         setter.begin_set_parameter(&params.chord_priority);
                                         setter.set_parameter(&params.chord_priority, pri);
                                         setter.end_set_parameter(&params.chord_priority);
                                     }
-                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
+                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common")
+                                        .on_hover_text("Identify musical ratios between notes and find a shared period (LCM) to capture the full chordal cycle.")
+                                        .clicked() 
+                                    {
                                         setter.begin_set_parameter(&params.chord_priority);
                                         setter.set_parameter(&params.chord_priority, pri);
                                         setter.end_set_parameter(&params.chord_priority);
                                     }
-                                }
-                            });
-
-                            if current_mode == TrackingMode::Manual {
-                                ui.horizontal(|ui| {
+                                } else {
                                     ui.label("Freqs:");
                                     for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
                                         let mut val = p.value();
@@ -477,8 +480,8 @@ impl Plugin for CurveSampler {
                                             setter.end_set_parameter(*p);
                                         }
                                     }
-                                });
-                            }
+                                }
+                            });
 
                             let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
                             ui.label(format!("Active Target: {:.2} Hz", display_freq)).on_hover_text(target_reason);
@@ -594,6 +597,11 @@ impl Plugin for CurveSampler {
                             if columns[0].button("📋 Copy to Clipboard").clicked() { 
                                 egui_ctx.copy_text(text.clone()); 
                             }
+                        } else {
+                            // Empty state to keep layout stable
+                            columns[0].allocate_space(egui::vec2(columns[0].available_width(), 140.0));
+                            columns[0].add_space(10.0);
+                            columns[0].add_enabled(false, egui::Button::new("📋 Copy to Clipboard"));
                         }
 
                         // Column 1: Curve Preview

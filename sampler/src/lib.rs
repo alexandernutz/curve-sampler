@@ -85,7 +85,7 @@ struct CurveSampler {
 
 #[derive(Params)]
 struct CurveSamplerParams {
-    #[persist = "editor_state_v2"]
+    #[persist = "editor_state_v3"]
     pub editor_state: Arc<EguiState>,
 
     #[id = "theme"]
@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.60";
+    const VERSION: &'static str = "0.1.61";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {

@@ -1,6 +1,6 @@
 use eframe::egui;
 
-#[derive(Debug, PartialEq, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Theme {
     Auto,
     Dark,

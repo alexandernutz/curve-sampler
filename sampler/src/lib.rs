@@ -633,6 +633,27 @@ impl Plugin for CurveSampler {
                         }
                     });
                 });
+
+                // Draw resize handle overlay at bottom-right corner
+                let screen_rect = egui_ctx.screen_rect();
+                let handle_size = 16.0;
+                let handle_rect = egui::Rect::from_min_size(
+                    egui::pos2(screen_rect.right() - handle_size, screen_rect.bottom() - handle_size),
+                    egui::vec2(handle_size, handle_size)
+                );
+                let painter = egui_ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("resize_handle")));
+                let handle_color = egui::Color32::from_gray(120);
+                painter.line_segment(
+                    [egui::pos2(handle_rect.left() + 8.0, handle_rect.bottom() - 3.0),
+                     egui::pos2(handle_rect.right() - 3.0, handle_rect.top() + 8.0)],
+                    (1.0, handle_color)
+                );
+                painter.line_segment(
+                    [egui::pos2(handle_rect.left() + 12.0, handle_rect.bottom() - 3.0),
+                     egui::pos2(handle_rect.right() - 3.0, handle_rect.top() + 4.0)],
+                    (1.0, handle_color)
+                );
+
                 egui_ctx.request_repaint();
             },
         )

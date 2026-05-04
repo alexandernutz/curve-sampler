@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering, AtomicU32, AtomicUsize};
 use std::fs::OpenOptions;
 use std::io::Write;
-use curve_core::bezier::{fit_bezier, fit_bezier_interp, fit_bezier_adaptive};
+use curve_core::bezier::{fit_bezier, fit_bezier_adaptive};
 use curve_core::zebra_format;
 
 mod theme;
@@ -15,15 +15,17 @@ pub use theme::Theme;
 const BUFFER_SIZE: usize = 32768;
 
 fn log_to_file(msg: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/tmp/curve_extractor.log")
-    {
-        let _ = writeln!(file, "[{}] {}", 
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(),
-            msg);
-    }
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/curve_extractor.log")
+        {
+            if let Ok(elapsed) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                let _ = writeln!(file, "[{}] {}", elapsed.as_millis(), msg);
+            }
+        }
+    }));
 }
 
 #[derive(Enum, PartialEq, Clone, Copy, Debug)]
@@ -44,25 +46,6 @@ pub enum ChordPriority {
     CommonPeriod,
 }
 
-#[derive(Enum, PartialEq, Clone, Copy, Debug)]
-pub enum WindowSize {
-    Small,
-    Medium,
-    Large,
-}
-
-/// A handle that sets an atomic boolean to false when dropped.
-/// Used to track GUI open/close state.
-struct GuiHandle {
-    is_open: Arc<AtomicBool>,
-}
-
-impl Drop for GuiHandle {
-    fn drop(&mut self) {
-        self.is_open.store(false, Ordering::Relaxed);
-        log_to_file("GUI Closed - Going to sleep");
-    }
-}
 
 struct CurveSampler {
     params: Arc<CurveSamplerParams>,
@@ -92,13 +75,8 @@ struct CurveSampler {
 
 #[derive(Params)]
 struct CurveSamplerParams {
-    pub editor_state: Arc<EguiState>,
-
     #[id = "theme"]
     pub theme: EnumParam<Theme>,
-
-    #[id = "win_size"]
-    pub window_size: EnumParam<WindowSize>,
 
     #[id = "domain"]
     pub domain: EnumParam<CurveDomain>,
@@ -144,16 +122,8 @@ impl Default for CurveSampler {
 
 impl Default for CurveSamplerParams {
     fn default() -> Self {
-        // S: 600×450, M: 700×500, L: 900×600
-        let (w, h) = match WindowSize::Medium {
-            WindowSize::Small => (600, 450),
-            WindowSize::Medium => (700, 500),
-            WindowSize::Large => (900, 600),
-        };
         Self {
-            editor_state: EguiState::from_size(w, h),
             theme: EnumParam::new("Theme", Theme::Auto),
-            window_size: EnumParam::new("Window", WindowSize::Medium),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -170,7 +140,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.67";
+    const VERSION: &'static str = "0.1.74";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -198,14 +168,16 @@ impl Plugin for CurveSampler {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         log_to_file("GUI Opened - Waking up");
         self.gui_is_open.store(true, Ordering::Relaxed);
-        
+
+        let editor_state = EguiState::from_size(700, 500);
+
         let trigger = self.trigger_capture.clone();
         let captured = self.captured_string.clone();
         let raw_cycle = self.raw_cycle.clone();
         let capture_ready = self.capture_ready.clone();
         let current_capture_domain = self.current_capture_domain.clone();
         let params = self.params.clone();
-        
+
         let audio_buffer_mutex = self.audio_buffer.clone();
         let write_idx_atomic = self.write_idx.clone();
         let target_freq_atomic = self.target_freq.clone();
@@ -215,13 +187,11 @@ impl Plugin for CurveSampler {
         let ema_period_mutex = self.ema_period.clone();
         let ema_mags_mutex = self.ema_magnitudes.clone();
         let fft_planner_mutex = self.fft_planner.clone();
-
-        // Create the drop handle for lifecycle tracking
-        let gui_handle = GuiHandle { is_open: self.gui_is_open.clone() };
+        let gui_is_open_clone = self.gui_is_open.clone();
 
         create_egui_editor(
-            self.params.editor_state.clone(),
-            gui_handle, // Pass it into the editor's user state
+            editor_state,
+            (),
             |_ctx, _user_state| {},
             move |egui_ctx, setter, _gui_handle| {
                 if capture_ready.load(Ordering::SeqCst) {
@@ -529,25 +499,6 @@ impl Plugin for CurveSampler {
                                 }
                                 ui.label("Theme:");
                             });
-                            ui.horizontal(|ui| {
-                                let mut current_size = params.window_size.value();
-                                if ui.radio_value(&mut current_size, WindowSize::Small, "S").clicked() {
-                                    setter.begin_set_parameter(&params.window_size);
-                                    setter.set_parameter(&params.window_size, current_size);
-                                    setter.end_set_parameter(&params.window_size);
-                                }
-                                if ui.radio_value(&mut current_size, WindowSize::Medium, "M").clicked() {
-                                    setter.begin_set_parameter(&params.window_size);
-                                    setter.set_parameter(&params.window_size, current_size);
-                                    setter.end_set_parameter(&params.window_size);
-                                }
-                                if ui.radio_value(&mut current_size, WindowSize::Large, "L").clicked() {
-                                    setter.begin_set_parameter(&params.window_size);
-                                    setter.set_parameter(&params.window_size, current_size);
-                                    setter.end_set_parameter(&params.window_size);
-                                }
-                                ui.label("Window:");
-                            });
                         });
                     });
 
@@ -763,6 +714,15 @@ impl CurveSampler {
             *raw_data = cycle;
             self.capture_ready.store(true, Ordering::SeqCst);
         }
+    }
+}
+
+impl Drop for CurveSampler {
+    fn drop(&mut self) {
+        self.gui_is_open.store(false, Ordering::Relaxed);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            log_to_file("Plugin shutting down");
+        }));
     }
 }
 

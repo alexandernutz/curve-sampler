@@ -154,7 +154,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.62";
+    const VERSION: &'static str = "0.1.63";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -517,7 +517,7 @@ impl Plugin for CurveSampler {
 
                     ui.columns(2, |columns| {
                         columns[0].vertical(|ui| {
-                            ui.label("Oscilloscope (Locked)");
+                            ui.label("Oscilloscope");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
@@ -536,7 +536,7 @@ impl Plugin for CurveSampler {
                         });
 
                         columns[1].vertical(|ui| {
-                            ui.label("Spectrum (Stable dB)");
+                            ui.label("Spectrum");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
                             painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));

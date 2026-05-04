@@ -136,13 +136,13 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(700, 480),
+            editor_state: EguiState::from_size(700, 500),
             theme: EnumParam::new("Theme", Theme::Auto),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
             chord_priority: EnumParam::new("Chord Priority", ChordPriority::LowestNote),
-            manual_freq1: FloatParam::new("Freq 1", 440.0, FloatRange::Skewed { min: 1.0, max: 20000.0, factor: 0.2 }),
+            manual_freq1: FloatParam::new("Freq 1", 440.0, FloatRange::Skewed { min: 20.0, max: 20000.0, factor: 0.2 }),
             manual_freq2: FloatParam::new("Freq 2", 0.0, FloatRange::Skewed { min: 0.0, max: 20000.0, factor: 0.2 }),
             manual_freq3: FloatParam::new("Freq 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20000.0, factor: 0.2 }),
         }
@@ -443,7 +443,7 @@ impl Plugin for CurveSampler {
                                 }
 
                                 if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual")
-                                    .on_hover_text("Sets capture length based on the manual frequency boxes below.")
+                                    .on_hover_text("Sets capture length based on the manual frequency boxes below. 0Hz means 'ignore'.")
                                     .clicked() 
                                 {
                                     setter.begin_set_parameter(&params.tracking_mode);

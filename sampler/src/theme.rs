@@ -10,26 +10,8 @@ pub enum Theme {
 
 pub fn apply(ctx: &egui::Context, theme: Theme) {
     match theme {
-        Theme::Auto => {
-            // Detect system theme from egui context
-            let is_dark = ctx.style().visuals.dark_mode;
-            // We can also check system_theme() if available in this egui version
-            if let Some(system_theme) = ctx.system_theme() {
-                match system_theme {
-                    egui::Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
-                    egui::Theme::Light => ctx.set_visuals(egui::Visuals::light()),
-                }
-            } else {
-                // Fallback to whatever egui thinks is right
-                if is_dark { ctx.set_visuals(egui::Visuals::dark()); }
-                else { ctx.set_visuals(egui::Visuals::light()); }
-            }
-        }
-        Theme::Dark => {
-            ctx.set_visuals(egui::Visuals::dark());
-        }
-        Theme::Light => {
-            ctx.set_visuals(egui::Visuals::light());
-        }
+        Theme::Auto => ctx.set_theme(egui::ThemePreference::System),
+        Theme::Dark => ctx.set_theme(egui::ThemePreference::Dark),
+        Theme::Light => ctx.set_theme(egui::ThemePreference::Light),
     }
 }

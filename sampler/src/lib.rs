@@ -10,7 +10,7 @@ use curve_core::zebra_format;
 
 mod theme;
 
-pub use theme::Theme;
+pub use theme::ThemeMode;
 
 const BUFFER_SIZE: usize = 32768;
 
@@ -76,7 +76,7 @@ struct CurveSampler {
 #[derive(Params)]
 struct CurveSamplerParams {
     #[id = "theme"]
-    pub theme: EnumParam<Theme>,
+    pub theme: EnumParam<ThemeMode>,
 
     #[id = "domain"]
     pub domain: EnumParam<CurveDomain>,
@@ -123,7 +123,7 @@ impl Default for CurveSampler {
 impl Default for CurveSamplerParams {
     fn default() -> Self {
         Self {
-            theme: EnumParam::new("Theme", Theme::Auto),
+            theme: EnumParam::new("Theme", ThemeMode::Dark),
             domain: EnumParam::new("Domain", CurveDomain::Geometry),
             normalize_capture: BoolParam::new("Normalize", true),
             tracking_mode: EnumParam::new("Tracking", TrackingMode::Auto),
@@ -140,7 +140,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Transform Project";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.74";
+    const VERSION: &'static str = "0.1.76";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -482,17 +482,12 @@ impl Plugin for CurveSampler {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                             ui.horizontal(|ui| {
                                 let mut current_theme = params.theme.value();
-                                if ui.radio_value(&mut current_theme, Theme::Light, "Light").clicked() {
+                                if ui.radio_value(&mut current_theme, ThemeMode::Light, "Light").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);
                                 }
-                                if ui.radio_value(&mut current_theme, Theme::Dark, "Dark").clicked() {
-                                    setter.begin_set_parameter(&params.theme);
-                                    setter.set_parameter(&params.theme, current_theme);
-                                    setter.end_set_parameter(&params.theme);
-                                }
-                                if ui.radio_value(&mut current_theme, Theme::Auto, "Auto").clicked() {
+                                if ui.radio_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
                                     setter.begin_set_parameter(&params.theme);
                                     setter.set_parameter(&params.theme, current_theme);
                                     setter.end_set_parameter(&params.theme);

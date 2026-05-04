@@ -1,8 +1,15 @@
-# Curve Sampler
+# Curve Sampler, Curve Jumbler
 
-**Curve Sampler** is a VST3 and CLAP plugin designed to bridge the gap between live audio and u-he Zebra(lette) 3's spline-based oscillator. It acts as an oscilloscope and spectroscope with "capture to curve" functionality, allowing you to extract any single cycle of audio directly into a format you can paste into Zebra 3.
+**Curve Sampler** is a VST3 and CLAP plugin designed to bridge the gap between live audio and u-he Zebra(lette) 3's spline-based oscillator. It acts as an oscilloscope and spectroscope with "capture to curve" functionality, allowing you to extract any single cycle of audio directly into a format you can paste into Zebra(lette) 3.
 
-## Overview
+**Curve Jumbler** runs locally in your browser. It is meant as a playground for the vector-graphics based 
+curves used in Zebra(lette) 3's OSC oscillator. 
+As interface, it uses Z3's svg-based vector graphics format.
+Try it here:
+[https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
+
+
+## Curve Sampler
 
 Put Curve Sampler anywhere in your audio chain, and it will extract the current single cycle into a Zebra(lette) 3 curve string. That curve can then be directly pasted into the Zebra(lette) 3 editor.
 
@@ -34,25 +41,39 @@ The easiest workflow is passing the same MIDI note (or simple chord) that goes i
 
 This repository also contains **Curve Jumbler**, a browser-based companion tool for exploring domain transformations (Geometry ↔ Spectrum) and batch curve operations (Flip, Fold, etc.). It serves as a visual playground for the `curve-core` library.
 
-You can try the live version of Curve Jumbler here: [https://YOUR_USERNAME.github.io/curve-sampler/](https://YOUR_USERNAME.github.io/curve-sampler/)
+The workflow is :
+ - Copy/Paste Curve from Z3 into Curve Jumbler (or start with a pre-defined or random curve), 
+ - Do a bunch of pre-defined transformations,
+ - Copy/Paste back into Z3.
+
+Note that Curve Jumbler is less polished than Curve Sampler, since I realized at some point that the latter can do everything the former can do and more.
+Advantages of Jumbler that remain are:
+ - higher import fidelity, as the Z3 curves are copied (but right now there is no way to e.g. get the curve "after effects")
+ - web app -- no download/installation (it runs purely on your machine, so no cloud / data upload involved)
+
+You can try the live version of Curve Jumbler here: [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
 
 ## Technical Notes & Zebra 3 Interop
 
 - **Point Limits:** Zebra 3 can crash if you attempt to paste a curve with an excessive number of points. Curve Sampler includes point-reduction algorithms and a hard-cap of 100 points to ensure stability.
-- **Approximation:** Signal extraction from rendered audio is subject to the uncertainty principle; "perfect" recovery is theoretically impossible, but the use of Blackman-Harris windowing and 4-point Catmull-Rom resampling gets us very close.
+- **Approximation:** Signal extraction from rendered audio is always approximative, but I tried to get 
+  close. (For those more versed than me, Gemini gives more details: Signal extraction from rendered audio is subject to the uncertainty principle; "perfect" recovery is theoretically impossible, but the use of Blackman-Harris windowing and 4-point Catmull-Rom resampling gets us very close.)
 
 ## Disclaimer & Safety
 
-- **Security:** While rare, it is possible to spread malware through plugin binaries. This project is fully open-source, and my name is attached to it, which is the best "trust guarantee" I can offer. Always be cautious with unsigned binaries.
+- **Security:** While rare, it is possible to spread malware through plugin binaries. This project is fully open-source, release binaries are built through github's standard workflow, and my name is attached to it, which is the best "trust guarantee" I can offer. Always be cautious with unsigned binaries.
 - **u-he Interop:** I don't want to cause extra work for the u-he team by "hacking" into an API (the clipboard format) that wasn't necessarily meant for this. If issues arise, I am happy to take this down or adjust it. If you're from u-he, feel free to reach out!
 
-## AI Use Disclosure
+## AI Use Disclosure & Thoughts
 
-This project was built with the help of **Claude Code** and **Gemini-CLI**. 
+I made this with the help of Claude Code and Gemini-CLI. 
 
-I have several years of industry/research programming experience, but I am not a DSP specialist. I wouldn't have been able to bridge the gap into Rust, the NIH-plug framework, and complex DSP algorithms without these tools. 
+I do have several years of industry/research programming experience, but I am not a DSP specialist. 
+I wouldn't have been able to make this without. The cost of learning Rust, the various frameworks, and DSP algorithms would have been way too high for me for my current time budget (though I'd love to learn more some time). 
 
-The process felt like acting as a "manager" for an incredibly fast programmer with deep domain knowledge and occasional odd quirks. This isn't "AI slop"—it’s a diligent, back-and-forth creative process that allows me to operate at a higher level of abstraction while still building something meaningful and functional on my own.
+Musing: This was a new experience, it's a bit like acting as the manager of a programmer with a lot of domain knowledge (who is also inhumanly fast, but also has odd quirks that humans don't have, usually), going back and forth. I think this process still can be done with more or less dilligence -- suffice to say, I'm not trying to build AI-code-slop here, but make something that makes sense and is useful and practical. 
+AI hopefully just allows me to operate on this more abstract level, while still doing it "all on my own". 
+I guess we'll all have to see where this goes and hopefully be responsible about it ...
 
 ---
 

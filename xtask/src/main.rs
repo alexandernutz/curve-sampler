@@ -1,5 +1,3 @@
-use nih_plug_xtask::*;
-
-fn main() -> Result<()> {
-    tasks::main()
+fn main() {
+    // xtask is not used in this project - manual bundling in GitHub Actions instead
 }

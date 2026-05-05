@@ -18,7 +18,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_prefix: windows
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: universal2-apple-darwin
             artifact_prefix: macos
 
     runs-on: ${{ matrix.os }}
@@ -31,14 +31,25 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install additional macOS targets
+        if: runner.os == 'macOS'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
-      - name: Build plugin
-        run: cargo build --release -p curve-sampler
+      - name: Build plugin (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release -p curve-sampler --target x86_64-apple-darwin
+          cargo build --release -p curve-sampler --target aarch64-apple-darwin
+
+      - name: Build plugin (non-macOS)
+        if: runner.os != 'macOS'
+        run: cargo build --release -p curve-sampler --target ${{ matrix.target }}
 
       - name: Prepare macOS artifacts
         if: runner.os == 'macOS'
@@ -46,9 +57,15 @@ jobs:
           mkdir -p artifacts
           VERSION="${{ github.ref_name }}"
 
+          # Create universal binary
+          lipo -create \
+            target/x86_64-apple-darwin/release/libcurve_sampler.dylib \
+            target/aarch64-apple-darwin/release/libcurve_sampler.dylib \
+            -output libcurve_sampler_universal.dylib
+
           # Create CLAP bundle structure
           mkdir -p "CurveSampler.clap/Contents/MacOS"
-          cp target/release/libcurve_sampler.dylib "CurveSampler.clap/Contents/MacOS/CurveSampler"
+          cp libcurve_sampler_universal.dylib "CurveSampler.clap/Contents/MacOS/CurveSampler"
 
           # Create CLAP Info.plist
           cat > "CurveSampler.clap/Contents/Info.plist" <<EOF
@@ -76,7 +93,7 @@ jobs:
 
           # Create VST3 bundle structure
           mkdir -p "CurveSampler.vst3/Contents/MacOS"
-          cp target/release/libcurve_sampler.dylib "CurveSampler.vst3/Contents/MacOS/CurveSampler"
+          cp libcurve_sampler_universal.dylib "CurveSampler.vst3/Contents/MacOS/CurveSampler"
 
           # Create VST3 Info.plist
           cat > "CurveSampler.vst3/Contents/Info.plist" <<EOF

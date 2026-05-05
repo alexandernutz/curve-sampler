@@ -141,6 +141,14 @@ jobs:
           VERSION="${{ github.ref_name }}"
           copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll "artifacts\CurveSampler-$VERSION.dll"
 
+      - name: Debug - List artifacts
+        run: |
+          echo "=== Contents of artifacts/ ==="
+          ls -lhR artifacts/ || echo "artifacts/ directory not found"
+          echo ""
+          echo "=== Contents of target/${{ matrix.target }}/release/ ==="
+          ls -lh target/${{ matrix.target }}/release/ | grep -E "\.(clap|vst3|so|dll|dylib)" || echo "No plugin files found"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

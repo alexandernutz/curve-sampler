@@ -24,7 +24,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -136,7 +136,7 @@ jobs:
           copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll artifacts/CurveSampler.dll
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4.3.6
+        uses: actions/upload-artifact@v4
         with:
           name: curve-sampler-${{ matrix.artifact_prefix }}-${{ github.ref_name }}
           path: artifacts/
@@ -147,10 +147,10 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4.3.6
+        uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 

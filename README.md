@@ -2,7 +2,7 @@
 
 **Curve Sampler** is a VST3 and CLAP plugin that captures waveforms from incoming audio and converts them 
 into Zebra(lette) 3's svg-based vector graphics format, enabling a "Curve resampling" workflow.
-It provides an oscilloscope and spectroscope, each with "capture to curve" functionality, allowing users to extract any single cycle of audio directly into a format they can paste into Zebra(lette) 3. 
+It provides an oscilloscope and a spectrum analyzer, each with "capture to curve" functionality, allowing users to extract any single cycle of audio directly into a format they can paste into Zebra(lette) 3. 
 
 **Curve Jumbler** runs locally in the browser. It can generate, import, transform, and export 
 the vector-graphics based curves used in Zebra(lette) 3's OSC oscillator. 
@@ -20,6 +20,11 @@ Curve Sampler lets users capture single cycle waveforms in Zebra 3's curve forma
 - **Cross-Synth Migration:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
 - **Chord Baking:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle.
 
+### Installation
+
+Copy the CLAP or VST3 file/folder from the releases section here in Github into your plugin folder.
+(You might need to restart your DAW or start a refresh or so to get it to see the new plugin.)
+
 ### Usage
 
 Steps:
@@ -29,11 +34,6 @@ Steps:
 
 Note that the width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to make a best effort at a clean capture.
 See [below](#finding-the-waveform-length) for details.
-
-### Installation
-
-Copy the CLAP or VST3 file from the releases section here in Github into your plugin folder.
-(You might need to restart your DAW or start a refresh or so to get it to see the new plugin.)
 
 ### Finding the waveform length
 

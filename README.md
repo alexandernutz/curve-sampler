@@ -46,7 +46,7 @@ Steps:
  - Copy/Paste the waveform in to Zebra 3's editor ("Paste Curve") and play it back
 
 Note that the width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to make a best effort at a clean capture.
-See [below](#finding-the-waveform-length) for details.
+Read on for details.
 
 ### Finding the waveform length
 
@@ -69,7 +69,7 @@ Some examples:
 - **Serum / Other Synths:** Other synths, for instance Serum 2, don't pass through MIDI notes. 
   - *Bitwig Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it.
 - **Other DAWs:** Setup varies and will depend on how the DAW routes MIDI. 
-  - *Fallback*: A Fallback, if MIDI routing is a pain is always to play, say an A4 and set 440Hz (or whatever your audio source is tuned to) Manually.
+  - *Fallback*: A Fallback, if MIDI routing is a pain is always to play, to set Curve Sampler to the frequency of the note you're playing (default is A4/440Hz, so one can also just play that note when curve sampling).
 
 ## Curve Jumbler (Web App)
 

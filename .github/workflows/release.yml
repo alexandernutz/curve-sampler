@@ -156,9 +156,24 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Copy Linux and Windows binaries
+          find release-artifacts -type f \( -name "*.so" -o -name "*.dll" \) -exec cp {} release-assets/ \;
+
+          # Zip macOS bundles (they have directory structure)
+          cd release-artifacts
+          find . -type d -name "*.clap" -o -name "*.vst3" | while read bundle; do
+            if [ -d "$bundle" ]; then
+              zip -r "../release-assets/$(basename $bundle).zip" "$bundle"
+            fi
+          done
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-artifacts/**/*
+          files: release-assets/*
           draft: false
           prerelease: false

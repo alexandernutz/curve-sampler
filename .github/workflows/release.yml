@@ -76,7 +76,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>
@@ -105,7 +105,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler.vst3</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>
@@ -142,7 +142,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>
@@ -171,7 +171,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler.vst3</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>
@@ -208,7 +208,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>
@@ -237,7 +237,7 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.alexandernutz.curve-sampler.vst3</string>
               <key>CFBundleManufacturer</key>
-              <string>lx_ntz</string>
+              <string>lx</string>
               <key>CFBundleName</key>
               <string>Curve Sampler</string>
               <key>CFBundlePackageType</key>

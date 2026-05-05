@@ -31,7 +31,7 @@ cat > local_bundle/CurveSampler.clap/Contents/Info.plist <<EOF
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleManufacturer</key>
-    <string>lx_ntz</string>
+    <string>lx</string>
     <key>CFBundleName</key>
     <string>Curve Sampler</string>
     <key>CFBundlePackageType</key>
@@ -63,7 +63,7 @@ cat > local_bundle/CurveSampler.vst3/Contents/Info.plist <<EOF
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleManufacturer</key>
-    <string>lx_ntz</string>
+    <string>lx</string>
     <key>CFBundleName</key>
     <string>Curve Sampler</string>
     <key>CFBundlePackageType</key>

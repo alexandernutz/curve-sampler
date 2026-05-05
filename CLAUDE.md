@@ -4,7 +4,7 @@
 
 This is a browser-based tool for transforming Bézier curves between time domain and spectral domain representations, designed to interoperate with u-he Zebra3's spline-based oscillator via clipboard copy/paste.
 
-See SPEC.md for full project specification and TEST_DATA.md for example Zebra3 curve data with decoded values.
+See `docs/SPEC.md` for full project specification and `docs/TEST_DATA.md` for example Zebra3 curve data with decoded values.
 
 ## Tech Stack
 
@@ -47,6 +47,6 @@ Start with the foundation modules in this order:
 
 ## Important Notes
 
-- The OV/IV tangent handle values' exact relationship to Bézier control points needs verification. Cross-reference the parsed internal format against the SVG export (both provided in TEST_DATA.md) to establish the mapping.
+- The OV/IV tangent handle values' exact relationship to Bézier control points needs verification. Cross-reference the parsed internal format against the SVG export (both provided in `docs/TEST_DATA.md`) to establish the mapping.
 - Bézier fitting (step 4 of the transform: fitting new cubic Béziers to FFT output) is the hardest algorithmic problem. Least-squares B-spline fitting with configurable number of control points is the planned approach.
 - egui's custom painting API (`egui::Painter`) supports drawing Bézier paths and handling mouse interaction — use this for the curve editor.

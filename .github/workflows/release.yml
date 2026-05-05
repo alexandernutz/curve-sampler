@@ -135,13 +135,25 @@ jobs:
           VERSION="${{ github.ref_name }}"
           PLATFORM="${{ matrix.artifact_prefix }}"
 
-          # Find and zip .clap and .vst3 bundles with platform name
+          # Try to find .clap and .vst3 bundles first
+          found_bundles=false
           find target/${{ matrix.target }}/release -maxdepth 1 \( -type d -name "*.clap" -o -type d -name "*.vst3" \) | while read bundle; do
             if [ -d "$bundle" ]; then
+              found_bundles=true
               basename=$(basename "$bundle")
               zip -r "artifacts/${basename%-*}-$PLATFORM-$VERSION.zip" "$bundle"
             fi
           done
+
+          # If no bundles found, copy raw binaries
+          if [ ! -f artifacts/*.zip ]; then
+            if [ -f "target/${{ matrix.target }}/release/curve_sampler.dll" ]; then
+              cp "target/${{ matrix.target }}/release/curve_sampler.dll" "artifacts/CurveSampler-$PLATFORM-$VERSION.dll"
+            fi
+            if [ -f "target/${{ matrix.target }}/release/libcurve_sampler.so" ]; then
+              cp "target/${{ matrix.target }}/release/libcurve_sampler.so" "artifacts/CurveSampler-$PLATFORM-$VERSION.so"
+            fi
+          fi
 
       - name: Debug - List artifacts
         shell: bash
@@ -176,6 +188,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-artifacts/**/*.zip
+          files: release-artifacts/**/*.{zip,dll,so}
           draft: false
           prerelease: false

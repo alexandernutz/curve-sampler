@@ -119,13 +119,13 @@ jobs:
           </plist>
           EOF
 
-          # Zip the bundles
-          zip -r "CurveSampler.clap-$VERSION.zip" CurveSampler.clap
-          zip -r "CurveSampler.vst3-$VERSION.zip" CurveSampler.vst3
+          # Zip the bundles with platform name
+          zip -r "CurveSampler.clap-macos-$VERSION.zip" CurveSampler.clap
+          zip -r "CurveSampler.vst3-macos-$VERSION.zip" CurveSampler.vst3
 
           # Move to artifacts
-          mv CurveSampler.clap-$VERSION.zip artifacts/
-          mv CurveSampler.vst3-$VERSION.zip artifacts/
+          mv CurveSampler.clap-macos-$VERSION.zip artifacts/
+          mv CurveSampler.vst3-macos-$VERSION.zip artifacts/
 
       - name: Prepare Linux and Windows artifacts
         if: runner.os != 'macOS'
@@ -133,12 +133,13 @@ jobs:
         run: |
           mkdir -p artifacts
           VERSION="${{ github.ref_name }}"
+          PLATFORM="${{ matrix.artifact_prefix }}"
 
-          # Find and zip .clap and .vst3 bundles
+          # Find and zip .clap and .vst3 bundles with platform name
           find target/${{ matrix.target }}/release -maxdepth 1 \( -type d -name "*.clap" -o -type d -name "*.vst3" \) | while read bundle; do
             if [ -d "$bundle" ]; then
               basename=$(basename "$bundle")
-              zip -r "artifacts/${basename%-*}-$VERSION.zip" "$bundle"
+              zip -r "artifacts/${basename%-*}-$PLATFORM-$VERSION.zip" "$bundle"
             fi
           done
 

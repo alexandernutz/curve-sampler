@@ -129,6 +129,7 @@ jobs:
 
       - name: Prepare Linux and Windows artifacts
         if: runner.os != 'macOS'
+        shell: bash
         run: |
           mkdir -p artifacts
           VERSION="${{ github.ref_name }}"

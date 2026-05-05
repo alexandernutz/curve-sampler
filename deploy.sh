@@ -30,6 +30,8 @@ cat > local_bundle/CurveSampler.clap/Contents/Info.plist <<EOF
     <string>com.alexandernutz.curve-sampler</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleManufacturer</key>
+    <string>lx_ntz</string>
     <key>CFBundleName</key>
     <string>Curve Sampler</string>
     <key>CFBundlePackageType</key>
@@ -60,6 +62,8 @@ cat > local_bundle/CurveSampler.vst3/Contents/Info.plist <<EOF
     <string>com.alexandernutz.curve-sampler.vst3</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleManufacturer</key>
+    <string>lx_ntz</string>
     <key>CFBundleName</key>
     <string>Curve Sampler</string>
     <key>CFBundlePackageType</key>
@@ -96,10 +100,12 @@ touch ~/Library/Audio/Plug-Ins/VST3/CurveSampler.vst3
 
 # 5. Build Web (Curve Jumbler)
 echo "Building Curve Jumbler (WASM)..."
+cd app
 wasm-pack build --target web --release
+cd ..
 mkdir -p dist
 cp index.html dist/
-cp -r pkg dist/
+cp -r app/pkg dist/
 
 echo "Done! Local version: $VERSION"
 echo "Web build ready in /dist"

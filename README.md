@@ -29,9 +29,9 @@ Try it here:
 Curve Sampler lets users capture single cycle waveforms in Zebra 3's curve format directly from an audio stream.
 
 ### Use Cases
-- **Post-FX Capture:** Capture a curve after Zebra 3's internal oscillator effects (useful until this becomes a native feature).
-- **Cross-Synth Migration:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
-- **Chord Baking:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle.
+- **Capture post OSC FX:** Capture a curve after Zebra 3's internal oscillator effects (useful until this becomes a native feature).
+- **Capture from other Synths:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
+- **Capture Chords:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle. (Naturally, this usually changes the root note.)
 
 ### Installation
 

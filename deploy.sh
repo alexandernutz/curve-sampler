@@ -8,8 +8,9 @@ VERSION="0.1.$NEW_VERSION"
 
 echo "Deploying version: $VERSION"
 
-# 1. Update source code version
+# 1. Update version in source code and Cargo.toml
 sed -i '' "s/const VERSION: .*/const VERSION: \&'static str = \"$VERSION\";/" sampler/src/lib.rs
+sed -i '' "s/^version = .*/version = \"$VERSION\"/" sampler/Cargo.toml
 
 # 2. Re-create Info.plist
 mkdir -p local_bundle/CurveSampler.clap/Contents/MacOS

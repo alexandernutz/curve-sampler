@@ -18,7 +18,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_prefix: windows
           - os: macos-latest
-            target: universal2-apple-darwin
+            target: x86_64-apple-darwin
             artifact_prefix: macos
 
     runs-on: ${{ matrix.os }}

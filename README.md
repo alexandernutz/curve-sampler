@@ -91,7 +91,7 @@ Furthermore **Window Resize** is not working. Not for lack of trying. Maybe I'll
 
 ## Support & Bug Reports
 
-**Found an issue?** Please open a [GitHub Issue](https://github.com/alexandernutz/svg-osc_gem/issues) with:
+**Found an issue?** Please open a [GitHub Issue](https://github.com/alexandernutz/curve-sampler/issues) with:
 - What DAW you're using
 - Steps to reproduce
 - Any relevant audio or screenshot
@@ -105,10 +105,10 @@ Furthermore **Window Resize** is not working. Not for lack of trying. Maybe I'll
 I made this with the help of Claude Code and Gemini-CLI. 
 
 I do have several years of industry/research programming experience, but I am not a DSP specialist. 
-I wouldn't have been able to make this without. The cost of learning Rust, the various frameworks, and DSP algorithms would have been way too high for me for my current time budget (though I'd love to learn more some time). 
+I wouldn't have been able to make this without. The cost of learning Rust, the various frameworks, and DSP algorithms would have exceeded my current time budget (though I'd love to learn more about all of this). 
 
-Musing: This was a new experience, it's a bit like acting as the manager of a programmer with a lot of domain knowledge (who is also inhumanly fast, but also has odd quirks that humans don't have, usually), going back and forth. I think this process still can be done with more or less dilligence -- suffice to say, I'm not trying to build AI-code-slop here, but make something that makes sense and is useful and practical. 
-AI hopefully just allows me to operate on this more abstract level, while still doing it "all on my own". 
+Musing: This was a new experience, it's a bit like acting as the manager of a programmer with a lot of domain knowledge (who is also inhumanly fast, but also has odd quirks that humans don't have, usually), doing the usual iterations one would do when programming in a team. I think this process still can be done with more or less dilligence -- suffice to say, I'm not trying to build AI-code-slop here, but make something that makes sense and is useful and practical. 
+AI hopefully just allows me to operate on this more abstract level, while still retaining all of my personal intentions. 
 I guess we'll all have to see where this goes and hopefully be responsible about it ...
 
 ## Licensing

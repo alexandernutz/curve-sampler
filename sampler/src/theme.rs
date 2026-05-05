@@ -41,6 +41,8 @@ pub mod dark {
     pub const BORDER:       Color32 = Color32::from_rgb(0x38, 0x3d, 0x50);
     /// Subtle internal divider
     pub const BORDER_FAINT: Color32 = Color32::from_rgb(0x27, 0x2b, 0x38);
+    /// Center axis / mid grid line
+    pub const AXIS:         Color32 = Color32::from_rgb(0x3a, 0x40, 0x55);
 }
 
 // ─── Light palette ───────────────────────────────────────────────────────────
@@ -63,6 +65,8 @@ pub mod light {
     pub const BORDER:       Color32 = Color32::from_rgb(0xb8, 0xba, 0xc8);
     /// Subtle internal divider
     pub const BORDER_FAINT: Color32 = Color32::from_rgb(0xcc, 0xce, 0xd8);
+    /// Center axis / mid grid line
+    pub const AXIS:         Color32 = Color32::from_rgb(0xb0, 0xb2, 0xc0);
 }
 
 pub fn apply(ctx: &nih_plug_egui::egui::Context, mode: ThemeMode) {

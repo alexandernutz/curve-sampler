@@ -1069,7 +1069,7 @@ dependencies = [
 
 [[package]]
 name = "curve-sampler"
-version = "0.1.81"
+version = "0.1.87"
 dependencies = [
  "curve-core",
  "log",

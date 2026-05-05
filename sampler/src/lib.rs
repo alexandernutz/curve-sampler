@@ -140,7 +140,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Sampler";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.81";
+    const VERSION: &'static str = "0.1.87";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -482,21 +482,23 @@ impl Plugin for CurveSampler {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                             ui.horizontal(|ui| {
                                 let mut current_theme = params.theme.value();
-                                if ui.radio_value(&mut current_theme, ThemeMode::Light, "Light").clicked() {
-                                    setter.begin_set_parameter(&params.theme);
-                                    setter.set_parameter(&params.theme, current_theme);
-                                    setter.end_set_parameter(&params.theme);
-                                }
-                                if ui.radio_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
-                                    setter.begin_set_parameter(&params.theme);
-                                    setter.set_parameter(&params.theme, current_theme);
-                                    setter.end_set_parameter(&params.theme);
-                                }
-                                if ui.radio_value(&mut current_theme, ThemeMode::Auto, "Auto").clicked() {
-                                    setter.begin_set_parameter(&params.theme);
-                                    setter.set_parameter(&params.theme, current_theme);
-                                    setter.end_set_parameter(&params.theme);
-                                }
+                                let label = match current_theme {
+                                    ThemeMode::Auto => "Auto",
+                                    ThemeMode::Light => "Light",
+                                    ThemeMode::Dark => "Dark",
+                                };
+                                egui::ComboBox::from_id_salt("theme_combo")
+                                    .selected_text(label)
+                                    .width(55.0)
+                                    .show_ui(ui, |ui| {
+                                        if ui.selectable_value(&mut current_theme, ThemeMode::Auto, "Auto").clicked()
+                                        || ui.selectable_value(&mut current_theme, ThemeMode::Light, "Light").clicked()
+                                        || ui.selectable_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
+                                            setter.begin_set_parameter(&params.theme);
+                                            setter.set_parameter(&params.theme, current_theme);
+                                            setter.end_set_parameter(&params.theme);
+                                        }
+                                    });
                                 ui.label("Theme:");
                             });
                         });
@@ -510,14 +512,17 @@ impl Plugin for CurveSampler {
                             ui.label("Oscilloscope");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
-                            painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
+                            let bg = if ui.visuals().dark_mode { theme::dark::BG_PANEL } else { theme::light::BG_PANEL };
+                            let axis = if ui.visuals().dark_mode { theme::dark::AXIS } else { theme::light::AXIS };
+                            painter.rect_filled(rect, 2.0, bg);
+                            painter.line_segment([egui::pos2(rect.left(), rect.center().y), egui::pos2(rect.right(), rect.center().y)], (1.0, axis));
                             if preview_cycle.len() >= 2 {
                                 let pts: Vec<egui::Pos2> = preview_cycle.iter().enumerate().map(|(i, &y)| {
                                     let x = rect.left() + (i as f32 / (preview_cycle.len() - 1) as f32) * rect.width();
                                     let py = rect.center().y - (y - center) / range * rect.height() * 0.45;
                                     egui::pos2(x, py)
                                 }).collect();
-                                painter.line(pts, (1.2, egui::Color32::YELLOW));
+                                painter.line(pts, (1.6, theme::SCOPE_TRACE));
                             }
                             ui.add_space(5.0);
                             if ui.button("Capture Geo").clicked() {
@@ -529,12 +534,14 @@ impl Plugin for CurveSampler {
                             ui.label("Spectrum");
                             let rect = ui.allocate_space(egui::vec2(ui.available_width(), 120.0)).1;
                             let painter = ui.painter_at(rect);
-                            painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
-                            painter.line_segment([egui::pos2(rect.left(), rect.top() + 5.0), egui::pos2(rect.right(), rect.top() + 5.0)], (1.0, egui::Color32::from_gray(60)));
+                            let bg = if ui.visuals().dark_mode { theme::dark::BG_PANEL } else { theme::light::BG_PANEL };
+                            let axis = if ui.visuals().dark_mode { theme::dark::AXIS } else { theme::light::AXIS };
+                            painter.rect_filled(rect, 2.0, bg);
+                            painter.line_segment([egui::pos2(rect.left(), rect.top() + 5.0), egui::pos2(rect.right(), rect.top() + 5.0)], (1.0, axis));
 
                             if let Some(mags) = ema_mags_mutex.try_lock() {
                                 let log_freq_scale = 10.0;
-                                let db_range = 60.0; 
+                                let db_range = 60.0;
                                 for k in 1..1024.min(mags.len()) {
                                     let linear_mag = mags.get(k).copied().unwrap_or(0.0);
                                     if linear_mag < 1e-6 { continue; }
@@ -546,7 +553,7 @@ impl Plugin for CurveSampler {
                                     let px_start = rect.left() + x_start * rect.width();
                                     let px_end = rect.left() + x_end * rect.width();
                                     let py = rect.bottom() - norm_db * rect.height();
-                                    painter.rect_filled(egui::Rect::from_min_max(egui::pos2(px_start, py), egui::pos2(px_end, rect.bottom())), 0.0, egui::Color32::from_rgb(0, 180, 255));
+                                    painter.rect_filled(egui::Rect::from_min_max(egui::pos2(px_start, py), egui::pos2(px_end, rect.bottom())), 0.0, theme::SPEC);
                                 }
                             }
                             ui.add_space(5.0);
@@ -606,26 +613,22 @@ impl Plugin for CurveSampler {
                         // Column 1: Curve Preview
                         let rect = columns[1].allocate_space(egui::vec2(columns[1].available_width(), 140.0)).1;
                         let painter = columns[1].painter_at(rect);
-                        painter.rect_filled(rect, 2.0, egui::Color32::from_black_alpha(200));
+                        let bg = if columns[1].visuals().dark_mode { theme::dark::BG_PANEL } else { theme::light::BG_PANEL };
+                        let faint = if columns[1].visuals().dark_mode { theme::dark::FAINT } else { theme::light::FAINT };
+                        painter.rect_filled(rect, 2.0, bg);
                         if let Some(text) = captured.try_lock() {
                             if let Ok(curve) = curve_core::zebra_format::parse(&text) {
-                                let is_spec = text.contains("MorphType = 'Peaks And Valleys'") && curve.points.len() > 40;
-                                let mut last_pos: Option<egui::Pos2> = None;
                                 let preview_steps = 512;
-                                for i in 0..=preview_steps {
+                                let pts: Vec<egui::Pos2> = (0..=preview_steps).map(|i| {
                                     let t = i as f32 / preview_steps as f32;
                                     let y = curve.eval(t);
                                     let px = rect.left() + t * rect.width();
                                     let py = rect.bottom() - y * rect.height();
-                                    let pos = egui::pos2(px, py);
-                                    if let Some(prev) = last_pos {
-                                        painter.line_segment([prev, pos], (1.2, columns[1].visuals().text_color()));
-                                    }
-
-                                    last_pos = Some(pos);
-                                }
+                                    egui::pos2(px, py)
+                                }).collect();
+                                painter.line(pts, (1.6, theme::STORED));
                             } else {
-                                painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), egui::Color32::GRAY);
+                                painter.text(rect.center(), egui::Align2::CENTER_CENTER, "[No Data]", egui::FontId::proportional(14.0), faint);
                             }
                         }
                     });

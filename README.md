@@ -12,9 +12,18 @@ Try it here:
 
 ## Screenshots
 
-![Curve Sampler plugin UI](docs/screenshots/curve-sampler-01.png)   
-
-![Curve Jumbler webpage UI](docs/screenshots/curve-jumbler-01.png)   
+<table>
+  <tr>
+    <td width="50%">
+      <strong>Curve Sampler (Plugin)</strong><br>
+      <img src="docs/screenshots/curve-sampler-01.png" alt="Curve Sampler plugin UI" width="100%">
+    </td>
+    <td width="50%">
+      <strong>Curve Jumbler (Web)</strong><br>
+      <img src="docs/screenshots/curve-jumbler-01.png" alt="Curve Jumbler webpage UI" width="100%">
+    </td>
+  </tr>
+</table>   
 
 ## Curve Sampler
 

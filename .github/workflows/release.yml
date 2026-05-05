@@ -38,10 +38,67 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p artifacts
-          # Copy CLAP bundle
-          cp -r target/release/CurveSampler.clap artifacts/
-          # Copy VST3 bundle
-          cp -r target/release/CurveSampler.vst3 artifacts/
+          VERSION="${{ github.ref_name }}"
+
+          # Create CLAP bundle structure
+          mkdir -p "CurveSampler.clap/Contents/MacOS"
+          cp target/release/libcurve_sampler.dylib "CurveSampler.clap/Contents/MacOS/CurveSampler"
+
+          # Create CLAP Info.plist
+          cat > "CurveSampler.clap/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # Create VST3 bundle structure
+          mkdir -p "CurveSampler.vst3/Contents/MacOS"
+          cp target/release/libcurve_sampler.dylib "CurveSampler.vst3/Contents/MacOS/CurveSampler"
+
+          # Create VST3 Info.plist
+          cat > "CurveSampler.vst3/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler.vst3</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # Move to artifacts
+          mv CurveSampler.clap artifacts/
+          mv CurveSampler.vst3 artifacts/
 
       - name: Prepare Linux artifacts
         if: runner.os == 'Linux'

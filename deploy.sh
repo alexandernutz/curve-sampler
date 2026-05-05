@@ -4,7 +4,7 @@ if [ ! -f .version ]; then echo "0" > .version; fi
 OLD_VERSION=$(cat .version)
 NEW_VERSION=$((OLD_VERSION + 1))
 echo $NEW_VERSION > .version
-VERSION="0.1.$NEW_VERSION"
+VERSION="0.2.$NEW_VERSION"
 
 echo "Deploying version: $VERSION"
 

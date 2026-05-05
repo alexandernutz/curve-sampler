@@ -3,7 +3,6 @@ members = [
     "core",
     "app",
     "sampler",
-    "xtask",
 ]
 resolver = "2"
 

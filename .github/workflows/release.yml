@@ -44,9 +44,9 @@ jobs:
       - name: Bundle plugin
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
-            cargo xtask bundle curve-sampler --release --target x86_64-apple-darwin --target aarch64-apple-darwin
+            cargo run --package xtask -- bundle curve-sampler --release --target x86_64-apple-darwin --target aarch64-apple-darwin
           else
-            cargo xtask bundle curve-sampler --release --target ${{ matrix.target }}
+            cargo run --package xtask -- bundle curve-sampler --release --target ${{ matrix.target }}
           fi
         shell: bash
 

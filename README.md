@@ -1,9 +1,11 @@
 # Curve Sampler, Curve Jumbler
 
-**Curve Sampler** is a VST3 and CLAP plugin designed to bridge the gap between live audio and u-he Zebra 3 and Zebralette 3's spline-based oscillator. It acts as an oscilloscope and spectroscope with "capture to curve" functionality, allowing you to extract any single cycle of audio directly into a format you can paste into Zebra(lette) 3.
+**Curve Sampler** is a VST3 and CLAP plugin that captures waveforms from incoming audio and converts them 
+into Zebra(lette) 3's svg-based vector graphics format, enabling a "Curve resampling" workflow.
+It provides an oscilloscope and spectroscope, each with "capture to curve" functionality, allowing users to extract any single cycle of audio directly into a format they can paste into Zebra(lette) 3. 
 
-**Curve Jumbler** runs locally in your browser. It is meant as a playground for the vector-graphics based 
-curves used in Zebra(lette) 3's OSC oscillator. 
+**Curve Jumbler** runs locally in the browser. It can generate, import, transform, and export 
+the vector-graphics based curves used in Zebra(lette) 3's OSC oscillator. 
 As interface, it uses Zebra(lette) 3's svg-based vector graphics format.
 Try it here:
 [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)

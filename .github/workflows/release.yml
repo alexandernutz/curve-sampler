@@ -119,21 +119,27 @@ jobs:
           </plist>
           EOF
 
+          # Zip the bundles
+          zip -r "CurveSampler.clap-$VERSION.zip" CurveSampler.clap
+          zip -r "CurveSampler.vst3-$VERSION.zip" CurveSampler.vst3
+
           # Move to artifacts
-          mv CurveSampler.clap artifacts/
-          mv CurveSampler.vst3 artifacts/
+          mv CurveSampler.clap-$VERSION.zip artifacts/
+          mv CurveSampler.vst3-$VERSION.zip artifacts/
 
       - name: Prepare Linux artifacts
         if: runner.os == 'Linux'
         run: |
           mkdir -p artifacts
-          cp target/x86_64-unknown-linux-gnu/release/libcurve_sampler.so artifacts/CurveSampler.so
+          VERSION="${{ github.ref_name }}"
+          cp target/x86_64-unknown-linux-gnu/release/libcurve_sampler.so "artifacts/CurveSampler-$VERSION.so"
 
       - name: Prepare Windows artifacts
         if: runner.os == 'Windows'
         run: |
           mkdir -p artifacts
-          copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll artifacts/CurveSampler.dll
+          VERSION="${{ github.ref_name }}"
+          copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll "artifacts\CurveSampler-$VERSION.dll"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -156,24 +162,9 @@ jobs:
         with:
           path: release-artifacts
 
-      - name: Prepare release assets
-        run: |
-          mkdir -p release-assets
-
-          # Copy Linux and Windows binaries
-          find release-artifacts -type f \( -name "*.so" -o -name "*.dll" \) -exec cp {} release-assets/ \;
-
-          # Zip macOS bundles (they have directory structure)
-          cd release-artifacts
-          find . -type d -name "*.clap" -o -name "*.vst3" | while read bundle; do
-            if [ -d "$bundle" ]; then
-              zip -r "../release-assets/$(basename $bundle).zip" "$bundle"
-            fi
-          done
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-assets/*
+          files: release-artifacts/**/*.zip,release-artifacts/**/*.so,release-artifacts/**/*.dll
           draft: false
           prerelease: false

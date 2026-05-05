@@ -13,33 +13,46 @@ Try it here:
 
 ## Curve Sampler
 
-Put Curve Sampler anywhere in your audio chain, and it will extract the current single cycle into a Zebra(lette) 3 (or short Zebra 3 or Z3 from now on) curve string. That curve can then be directly pasted into the Zebra 3 editor.
-
-The width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to make a best effort at a clean capture.
+Curve Sampler lets users capture single cycle waveforms in Zebra 3's curve format directly from an audio stream.
 
 ### Use Cases
 - **Post-FX Capture:** Capture a curve after Zebra 3's internal oscillator effects (useful until this becomes a native feature).
 - **Cross-Synth Migration:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
 - **Chord Baking:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle.
 
+### Usage
+
+Steps:
+ - Put Curve Sampler into audio chain at the place you want to capture and open the UI
+ - Observe the oscilloscope and spectrum analyzer, press "capture" when you like what you see
+ - Copy/Paste the waveform in to Zebra 3's editor ("Paste Curve") and play it back
+
+Note that the width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to make a best effort at a clean capture.
+See [below](#finding-the-waveform-length) for details.
+
 ### Installation
 
 Copy the CLAP or VST3 file from the releases section here in Github into your plugin folder.
 (You might need to restart your DAW or start a refresh or so to get it to see the new plugin.)
 
-### Practical Setup
+### Finding the waveform length
 
 To determine the length of the captured waveform cycle, Curve Sampler needs some input.
 
 The easiest workflow is passing the same MIDI note (or simple chord) that goes into your synth directly to Curve Sampler.
 Alternatively, there is the option to set up to three frequencies manually.
 
+Note that the oscilloscope and spectrum analyzer also react to this for their display, so they act as a 
+preview for the frequency setting.
+
 Curve Jumbler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
+
+Hover over the frequency to get a tooltip explaining how it was computed.
 
 Note that MIDI routing workflow depends on the specific DAW and device chain.
 
 Some examples:
-- **Bitwig + Zebra 3:** Zebra 3 and many other plugins pass through MIDI notes they receive. So one can just place Curve Sampler after it, and it will receive the MIDI notes.
+- **Bitwig + Zebra 3:** Zebra 3 and many other plugins pass through MIDI notes they receive. In that case one can just place Curve Sampler after it, and it will receive the MIDI notes live.
 - **Serum / Other Synths:** Other synths, for instance Serum 2, don't pass through MIDI notes. 
   - *Bitwig Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it.
 - **Other DAWs:** Setup varies and will depend on how the DAW routes MIDI. 
@@ -61,22 +74,22 @@ Advantages of Jumbler that remain are:
  - higher import fidelity, as the Z3 curves are copied (but right now there is no way to e.g. get the curve "after effects")
  - web app -- no download/installation (also, it runs purely locally in your browser, so no cloud / data upload involved)
 
-You can try the live version of Curve Jumbler here: [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
+Curve Jumbler runs here as a "static" github page: [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
 
 ## General Notes
 These things apply to both Curve Sampler and Curve Jumbler.
 
-### Known Limitations
+### Known Limitations and Philosophy
 
-For technical and funamental/mathematical reasons, parts of the Curve Sampler workflow are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
+For technical and funamental/mathematical reasons, parts of the Curve Sampler signal chain are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
 
-Part of the charm, in my opinion, of such a quick tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. To me, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
+Part of the charm, in my opinion, of such a simple tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. Keep things playful, rather than "production-grade". To me personally, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
 
 While the outputs sometimes are a bit "noisy," Zebra 3's inbuilt tools (Simplify, Beautify, Line-up) can often help to polish the curves with a few clicks after pasting.
 
 Note that curves with many points can be heavy on Zebra 3's performance, especially if they are being morphed, simplifying them can help a lot there.
 
-Furthermore **Window Resize** is not working. Not for lack of trying. Maybe I'll have a go at it in the near future. Feel free to reach out if you need it. 
+Furthermore **Window Resize** functionality is absent. Not for lack of trying on my side. Maybe I'll have a go at it in the near future. Feel free to reach out if you need it. 
 
 ### Technical Notes & Zebra 3 Interop
 

@@ -122,7 +122,7 @@ Furthermore **Window Resize** functionality is absent. Not for lack of trying on
 - Steps to reproduce
 - Any relevant audio or screenshot
 
-**Platform Notes:** Currently tested on Bitwig, with limited testing on other DAWs and platforms. If you test on a new DAW or OS, feedback is welcome!
+**Platform Notes:** Tested on Bitwig (VST3), Ableton Live 11 (VST3), and Studio One (CLAP) on macOS. Windows and Linux builds are provided but less tested—feedback welcome!
 
 **Dependencies:** See [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) for a list of libraries and tools used in this project.
 
@@ -147,4 +147,4 @@ I guess we'll all have to see where this goes and hopefully be responsible about
 
 ---
 
-**Version:** 0.1.77
+**Version:** 0.1.81

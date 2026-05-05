@@ -8,9 +8,10 @@ VERSION="0.1.$NEW_VERSION"
 
 echo "Deploying version: $VERSION"
 
-# 1. Update version in source code and Cargo.toml
+# 1. Update version in source code, Cargo.toml, and README
 sed -i '' "s/const VERSION: .*/const VERSION: \&'static str = \"$VERSION\";/" sampler/src/lib.rs
 sed -i '' "s/^version = .*/version = \"$VERSION\"/" sampler/Cargo.toml
+sed -i '' "s/\*\*Version:\*\* .*/\*\*Version:\*\* $VERSION/" README.md
 
 # 2. Re-create Info.plist for CLAP and VST3
 mkdir -p local_bundle/CurveSampler.clap/Contents/MacOS

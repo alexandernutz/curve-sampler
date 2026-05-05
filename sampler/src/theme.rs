@@ -12,8 +12,6 @@ pub enum ThemeMode {
 
 // ─── Accent colours (same in both themes) ────────────────────────────────────
 
-/// Geometry panel accent — blue
-pub const GEO:         nih_plug_egui::egui::Color32 = nih_plug_egui::egui::Color32::from_rgb(0x3d, 0x78, 0xf0);
 /// Spectrum panel accent — warm orange
 pub const SPEC:        nih_plug_egui::egui::Color32 = nih_plug_egui::egui::Color32::from_rgb(0xd4, 0x5e, 0x20);
 /// Stored-curve preview accent — soft green

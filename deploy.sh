@@ -87,6 +87,14 @@ cargo build --release -p curve-sampler
 cp target/release/libcurve_sampler.dylib local_bundle/CurveSampler.clap/Contents/MacOS/CurveSampler
 cp target/release/libcurve_sampler.dylib local_bundle/CurveSampler.vst3/Contents/MacOS/CurveSampler
 
+# Add PkgInfo (required by Ableton and other strict hosts)
+echo -n "BNDL????" > local_bundle/CurveSampler.clap/Contents/PkgInfo
+echo -n "BNDL????" > local_bundle/CurveSampler.vst3/Contents/PkgInfo
+
+# Ad-hoc sign the full bundles
+codesign --force --sign - --deep local_bundle/CurveSampler.clap
+codesign --force --sign - --deep local_bundle/CurveSampler.vst3
+
 # Install CLAP
 rm -rf ~/Library/Audio/Plug-Ins/CLAP/CurveSampler.clap
 cp -R local_bundle/CurveSampler.clap ~/Library/Audio/Plug-Ins/CLAP/

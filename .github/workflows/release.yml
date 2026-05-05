@@ -90,6 +90,8 @@ jobs:
           </dict>
           </plist>
           EOF
+          echo -n "BNDL????" > CurveSampler.clap/Contents/PkgInfo
+          codesign --force --sign - --deep CurveSampler.clap
           zip -r artifacts/CurveSampler.clap-macos-$VERSION.zip CurveSampler.clap
 
           # Create and zip VST3 bundle
@@ -119,6 +121,8 @@ jobs:
           </dict>
           </plist>
           EOF
+          echo -n "BNDL????" > CurveSampler.vst3/Contents/PkgInfo
+          codesign --force --sign - --deep CurveSampler.vst3
           zip -r artifacts/CurveSampler.vst3-macos-$VERSION.zip CurveSampler.vst3
 
       - name: Create bundles (Linux)

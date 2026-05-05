@@ -137,10 +137,10 @@ impl Default for CurveSamplerParams {
 
 impl Plugin for CurveSampler {
     const NAME: &'static str = "Curve Sampler";
-    const VENDOR: &'static str = "Curve Transform Project";
+    const VENDOR: &'static str = "Curve Sampler";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.1.79";
+    const VERSION: &'static str = "0.1.81";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {

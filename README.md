@@ -87,6 +87,17 @@ Furthermore **Window Resize** is not working. Not for lack of trying. Maybe I'll
 - **Security:** While rare, it is possible to spread malware through plugin binaries. This project is fully open-source, release binaries are built through github's standard workflow, and my name is attached to it, which is the best "trust guarantee" I can offer. Always be cautious with unsigned binaries.
 - **u-he Interop:** I don't want to cause extra work for the u-he team by "hacking" into an API (the clipboard format) that wasn't necessarily meant for this. If issues arise, I am happy to take this down or adjust it. If you're from u-he, feel free to reach out!
 
+## Support & Bug Reports
+
+**Found an issue?** Please open a [GitHub Issue](https://github.com/alexandernutz/svg-osc_gem/issues) with:
+- What DAW you're using
+- Steps to reproduce
+- Any relevant audio or screenshot
+
+**Platform Notes:** Currently tested on Bitwig, with limited testing on other DAWs and platforms. If you test on a new DAW or OS, feedback is welcome!
+
+**Dependencies:** See [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) for a list of libraries and tools used in this project.
+
 ## AI Use Disclosure & Thoughts
 
 I made this with the help of Claude Code and Gemini-CLI. 

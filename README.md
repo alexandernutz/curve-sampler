@@ -10,6 +10,11 @@ As interface, it uses Zebra(lette) 3's svg-based vector graphics format.
 Try it here:
 [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
 
+## Screenshots
+
+![Curve Sampler plugin UI](docs/screenshots/curve-sampler-01.png)   
+
+![Curve Jumbler webpage UI](docs/screenshots/curve-jumbler-01.png)   
 
 ## Curve Sampler
 

@@ -42,7 +42,14 @@ jobs:
           sudo apt-get install -y libgl1-mesa-dev libx11-dev libx11-xcb-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-util-dev
 
       - name: Build plugin
-        run: cargo build --release -p curve-sampler --target ${{ matrix.target }}
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cargo build --release -p curve-sampler --target x86_64-apple-darwin
+            cargo build --release -p curve-sampler --target aarch64-apple-darwin
+          else
+            cargo build --release -p curve-sampler --target ${{ matrix.target }}
+          fi
+        shell: bash
 
       - name: Create bundles (macOS)
         if: runner.os == 'macOS'

@@ -127,13 +127,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p artifacts
-          cp target/release/libcurve_sampler.so artifacts/CurveSampler.so
+          cp target/x86_64-unknown-linux-gnu/release/libcurve_sampler.so artifacts/CurveSampler.so
 
       - name: Prepare Windows artifacts
         if: runner.os == 'Windows'
         run: |
           mkdir -p artifacts
-          copy target/release/curve_sampler.dll artifacts/CurveSampler.dll
+          copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll artifacts/CurveSampler.dll
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4.3.6

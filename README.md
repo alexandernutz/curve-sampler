@@ -11,13 +11,13 @@ Try it here:
 
 ## Screenshots
 
-<table>
+<table style="border: none;">
   <tr>
-    <td width="50%">
+    <td width="50%" style="border: none; padding: 10px;">
       <strong>Curve Sampler (Plugin)</strong><br>
       <img src="docs/screenshots/curve-sampler-01.png" alt="Curve Sampler plugin UI" width="100%">
     </td>
-    <td width="50%">
+    <td width="50%" style="border: none; padding: 10px;">
       <strong>Curve Jumbler (Web)</strong><br>
       <img src="docs/screenshots/curve-jumbler-01.png" alt="Curve Jumbler webpage UI" width="100%">
     </td>

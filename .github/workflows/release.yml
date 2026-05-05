@@ -127,19 +127,19 @@ jobs:
           mv CurveSampler.clap-$VERSION.zip artifacts/
           mv CurveSampler.vst3-$VERSION.zip artifacts/
 
-      - name: Prepare Linux artifacts
-        if: runner.os == 'Linux'
+      - name: Prepare Linux and Windows artifacts
+        if: runner.os != 'macOS'
         run: |
           mkdir -p artifacts
           VERSION="${{ github.ref_name }}"
-          cp target/x86_64-unknown-linux-gnu/release/libcurve_sampler.so "artifacts/CurveSampler-$VERSION.so"
 
-      - name: Prepare Windows artifacts
-        if: runner.os == 'Windows'
-        run: |
-          mkdir -p artifacts
-          VERSION="${{ github.ref_name }}"
-          copy target/x86_64-pc-windows-msvc/release/curve_sampler.dll "artifacts\CurveSampler-$VERSION.dll"
+          # Find and zip .clap and .vst3 bundles
+          find target/${{ matrix.target }}/release -maxdepth 1 \( -type d -name "*.clap" -o -type d -name "*.vst3" \) | while read bundle; do
+            if [ -d "$bundle" ]; then
+              basename=$(basename "$bundle")
+              zip -r "artifacts/${basename%-*}-$VERSION.zip" "$bundle"
+            fi
+          done
 
       - name: Debug - List artifacts
         run: |
@@ -173,6 +173,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-artifacts/**/*.zip,release-artifacts/**/*.so,release-artifacts/**/*.dll
+          files: release-artifacts/**/*.zip
           draft: false
           prerelease: false

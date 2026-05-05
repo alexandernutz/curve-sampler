@@ -143,6 +143,7 @@ jobs:
           done
 
       - name: Debug - List artifacts
+        shell: bash
         run: |
           echo "=== Contents of artifacts/ ==="
           ls -lhR artifacts/ || echo "artifacts/ directory not found"

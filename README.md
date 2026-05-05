@@ -11,7 +11,7 @@ Try it here:
 
 ## Curve Sampler
 
-Put Curve Sampler anywhere in your audio chain, and it will extract the current single cycle into a Zebra(lette) 3 curve string. That curve can then be directly pasted into the Zebra(lette) 3 editor.
+Put Curve Sampler anywhere in your audio chain, and it will extract the current single cycle into a Zebra(lette) 3 (or short Zebra 3 or Z3 from now on) curve string. That curve can then be directly pasted into the Zebra 3 editor.
 
 The width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to ensure a clean capture.
 
@@ -20,40 +20,57 @@ The width of the single cycle is determined either by incoming MIDI notes or by 
 - **Cross-Synth Migration:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
 - **Chord Baking:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle.
 
-## Philosophically Speaking...
+### Practical Setup
 
-For technical and mathematical reasons, parts of the Curve Sampler workflow are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but it’s more of a **playground** than a laboratory tool.
-
-Part of the charm of such a quick tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. To me, the main benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them yourself.
-
-While the outputs sometimes look a bit "noisy," Zebra 3's inbuilt tools (Line-up, Simplify, Beautify) make it easy to polish the curves with a few clicks after pasting.
-
-## Practical Setup
+To determine the lenght of the captured waveform cycle, Curve Sampler needs some input.
 
 The easiest workflow is passing the same MIDI note (or simple chord) that goes into your synth directly to Curve Sampler.
+Additionally, there is the option to set up to three frequencies manually.
 
-- **Bitwig:** Place Curve Sampler in the device chain after your synth (e.g., Zebra 3). Bitwig passes MIDI through the chain automatically.
-- **Serum / Other Synths:** Some synths don't pass MIDI notes through to the next plugin in the chain. In this case, Curve Sampler will revert to "Manual Frequency Mode," which might cause jumps in the geometry view.
-  - *Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it within the layer or use a Note Receiver.
-- **Other DAWs:** Setup varies, but ensuring Curve Sampler receives the same MIDI as the source synth is key for stable "Locked" visualization.
+Curve Jumbler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
+
+Note that MIDI routing workflow depends on the specific DAW and device chain.
+
+Some examples:
+- **Bitwig + Zebra 3:** Zebra 3 and many other plugins pass through MIDI notes they receive. So one can just place Curve Sampler after it, and it will receive the MIDI notes.
+- **Serum / Other Synths:** Other synths, for instance Serum 2, don't pass through MIDI notes. 
+  - *Bitwig Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it.
+- **Other DAWs:** Setup varies and will depend on how the DAW routes MIDI. 
+  - *Fallback*: A Fallback, if MIDI routing is a pain is always to play, say an A4 and set 440Hz (or whatever your audio source is tuned to) Manually.
 
 ## Curve Jumbler (Web App)
 
-This repository also contains **Curve Jumbler**, a browser-based companion tool for exploring domain transformations (Geometry ↔ Spectrum) and batch curve operations (Flip, Fold, etc.). It serves as a visual playground for the `curve-core` library.
+This repository also contains **Curve Jumbler**, a browser-based tool that allows generation and manipulation
+of waveforms in the Zebra 3-style vector representation.
+It allows domain transformations (Geometry ↔ Spectrum) and other curve operations (Flip, Fold, etc.). 
 
 The workflow is :
  - Copy/Paste Curve from Z3 into Curve Jumbler (or start with a pre-defined or random curve), 
  - Do a bunch of pre-defined transformations,
  - Copy/Paste back into Z3.
 
-Note that Curve Jumbler is less polished than Curve Sampler, since I realized at some point that the latter can do everything the former can do and more.
+Note that Curve Jumbler is less polished than Curve Sampler, since I realized at some point that the latter can do everything the former can do (sort of) and more.
 Advantages of Jumbler that remain are:
  - higher import fidelity, as the Z3 curves are copied (but right now there is no way to e.g. get the curve "after effects")
- - web app -- no download/installation (it runs purely on your machine, so no cloud / data upload involved)
+ - web app -- no download/installation (also, it runs purely locally in your browser, so no cloud / data upload involved)
 
 You can try the live version of Curve Jumbler here: [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
 
-## Technical Notes & Zebra 3 Interop
+## General Notes
+These things apply to both Curve Sampler and Curve Jumbler.
+
+### Known Limitations
+
+For technical and funamental/mathematical reasons, parts of the Curve Sampler workflow are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
+
+Part of the charm of such a quick tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. To me, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
+
+While the outputs sometimes are a bit "noisy," Zebra 3's inbuilt tools (Line-up, Simplify, Beautify) can often help to polish the curves with a few clicks after pasting.
+
+Note that curves with many points can be heavy on Zebra 3's performance, especially if they are being morphed, simplifying them can help a lot there.
+
+
+### Technical Notes & Zebra 3 Interop
 
 - **Point Limits:** Zebra 3 can crash if you attempt to paste a curve with an excessive number of points. Curve Sampler includes point-reduction algorithms and a hard-cap of 100 points to ensure stability.
 - **Approximation:** Signal extraction from rendered audio is always approximative, but I tried to get 
@@ -82,8 +99,6 @@ I guess we'll all have to see where this goes and hopefully be responsible about
 **Plugin Binaries (in releases):**
 - **CLAP:** MIT
 - **VST3:** GPLv3
-
-The VST3 SDK itself is dual-licensed (GPLv3 or proprietary Steinberg license). Since this project is open-source, the GPLv3 path applies—no additional licensing agreement is needed. For end users loading the plugin in a DAW, this is a practical non-issue: you can use the plugin freely, and GPL vs MIT makes no difference if you're not redistributing modified binary code.
 
 ---
 

@@ -1,10 +1,10 @@
 # Curve Sampler, Curve Jumbler
 
-**Curve Sampler** is a VST3 and CLAP plugin designed to bridge the gap between live audio and u-he Zebra(lette) 3's spline-based oscillator. It acts as an oscilloscope and spectroscope with "capture to curve" functionality, allowing you to extract any single cycle of audio directly into a format you can paste into Zebra(lette) 3.
+**Curve Sampler** is a VST3 and CLAP plugin designed to bridge the gap between live audio and u-he Zebra 3 and Zebralette 3's spline-based oscillator. It acts as an oscilloscope and spectroscope with "capture to curve" functionality, allowing you to extract any single cycle of audio directly into a format you can paste into Zebra(lette) 3.
 
 **Curve Jumbler** runs locally in your browser. It is meant as a playground for the vector-graphics based 
 curves used in Zebra(lette) 3's OSC oscillator. 
-As interface, it uses Z3's svg-based vector graphics format.
+As interface, it uses Zebra(lette) 3's svg-based vector graphics format.
 Try it here:
 [https://alexandernutz.github.io/curve-sampler/](https://alexandernutz.github.io/curve-sampler/)
 
@@ -13,19 +13,24 @@ Try it here:
 
 Put Curve Sampler anywhere in your audio chain, and it will extract the current single cycle into a Zebra(lette) 3 (or short Zebra 3 or Z3 from now on) curve string. That curve can then be directly pasted into the Zebra 3 editor.
 
-The width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to ensure a clean capture.
+The width of the single cycle is determined either by incoming MIDI notes or by manually setting a frequency. The plugin uses zero-crossing detection and stabilization to make a best effort at a clean capture.
 
 ### Use Cases
 - **Post-FX Capture:** Capture a curve after Zebra 3's internal oscillator effects (useful until this becomes a native feature).
 - **Cross-Synth Migration:** Create a Zebra curve from another synth's output (e.g., "migrating" a Serum wavetable cycle without going through intermediate files).
 - **Chord Baking:** Capture a chord into a single curve. It detects up to three MIDI notes and finds a reasonable least common multiple for the wavelength, allowing you to "bake" a chordal timbre into a single oscillator cycle.
 
+### Installation
+
+Copy the CLAP or VST3 file from the releases section here in Github into your plugin folder.
+(You might need to restart your DAW or start a refresh or so to get it to see the new plugin.)
+
 ### Practical Setup
 
-To determine the lenght of the captured waveform cycle, Curve Sampler needs some input.
+To determine the length of the captured waveform cycle, Curve Sampler needs some input.
 
 The easiest workflow is passing the same MIDI note (or simple chord) that goes into your synth directly to Curve Sampler.
-Additionally, there is the option to set up to three frequencies manually.
+Alternatively, there is the option to set up to three frequencies manually.
 
 Curve Jumbler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
 
@@ -63,12 +68,13 @@ These things apply to both Curve Sampler and Curve Jumbler.
 
 For technical and funamental/mathematical reasons, parts of the Curve Sampler workflow are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
 
-Part of the charm of such a quick tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. To me, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
+Part of the charm, in my opinion, of such a quick tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. To me, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
 
-While the outputs sometimes are a bit "noisy," Zebra 3's inbuilt tools (Line-up, Simplify, Beautify) can often help to polish the curves with a few clicks after pasting.
+While the outputs sometimes are a bit "noisy," Zebra 3's inbuilt tools (Simplify, Beautify, Line-up) can often help to polish the curves with a few clicks after pasting.
 
 Note that curves with many points can be heavy on Zebra 3's performance, especially if they are being morphed, simplifying them can help a lot there.
 
+Furthermore **Window Resize** is not working. Not for lack of trying. Maybe I'll have a go at it in the near future. Feel free to reach out if you need it. 
 
 ### Technical Notes & Zebra 3 Interop
 

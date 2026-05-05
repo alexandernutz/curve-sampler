@@ -32,7 +32,15 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build WASM
-        run: wasm-pack build --target web --release
+        run: |
+          cd app
+          wasm-pack build --target web --release
+
+      - name: Prepare deployment
+        run: |
+          mkdir -p dist
+          cp index.html dist/
+          cp -r app/pkg dist/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -40,9 +48,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
-          # We only need index.html, pkg/ and curves/ for the web app
-          # But uploading the root is fine as long as index.html is there.
+          path: 'dist'
 
       - name: Deploy to GitHub Pages
         id: deployment

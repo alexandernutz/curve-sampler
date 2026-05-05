@@ -41,41 +41,147 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libx11-dev libx11-xcb-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-util-dev
 
-      - name: Bundle plugin
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            cargo run --package xtask -- bundle curve-sampler --release --target x86_64-apple-darwin --target aarch64-apple-darwin
-          else
-            cargo run --package xtask -- bundle curve-sampler --release --target ${{ matrix.target }}
-          fi
-        shell: bash
+      - name: Build plugin
+        run: cargo build --release -p curve-sampler --target ${{ matrix.target }}
 
-      - name: Prepare release artifacts
+      - name: Create bundles (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p artifacts
+          VERSION="${{ github.ref_name }}"
+
+          # Create universal binary
+          lipo -create \
+            target/x86_64-apple-darwin/release/libcurve_sampler.dylib \
+            target/aarch64-apple-darwin/release/libcurve_sampler.dylib \
+            -output libcurve_sampler_universal.dylib
+
+          # Create and zip CLAP bundle
+          mkdir -p CurveSampler.clap/Contents/MacOS
+          cp libcurve_sampler_universal.dylib CurveSampler.clap/Contents/MacOS/CurveSampler
+          cat > CurveSampler.clap/Contents/Info.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          zip -r artifacts/CurveSampler.clap-macos-$VERSION.zip CurveSampler.clap
+
+          # Create and zip VST3 bundle
+          mkdir -p CurveSampler.vst3/Contents/MacOS
+          cp libcurve_sampler_universal.dylib CurveSampler.vst3/Contents/MacOS/CurveSampler
+          cat > CurveSampler.vst3/Contents/Info.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler.vst3</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          zip -r artifacts/CurveSampler.vst3-macos-$VERSION.zip CurveSampler.vst3
+
+      - name: Create bundles (Linux/Windows)
+        if: runner.os != 'macOS'
         shell: bash
         run: |
           mkdir -p artifacts
           VERSION="${{ github.ref_name }}"
           PLATFORM="${{ matrix.artifact_prefix }}"
+          TARGET="${{ matrix.target }}"
 
-          # Copy bundles from nih-plug's output directory
-          if [ -d "target/release/bundle" ]; then
-            cd target/release/bundle
-            for bundle in */CurveSampler.*; do
-              if [ -d "$bundle" ]; then
-                bundle_name=$(basename "$bundle")
-                zip -r "../../artifacts/${bundle_name}-$PLATFORM-$VERSION.zip" "$bundle"
-              fi
-            done
+          # Find the compiled binary
+          if [ "$PLATFORM" = "linux" ]; then
+            BINARY="target/$TARGET/release/libcurve_sampler.so"
+            BINARY_NAME="libcurve_sampler.so"
+          else
+            BINARY="target/$TARGET/release/curve_sampler.dll"
+            BINARY_NAME="curve_sampler.dll"
           fi
 
-      - name: Debug - List artifacts
-        shell: bash
-        run: |
-          echo "=== Contents of artifacts/ ==="
-          ls -lhR artifacts/ || echo "artifacts/ directory not found"
-          echo ""
-          echo "=== Contents of target/${{ matrix.target }}/release/ ==="
-          ls -lh target/${{ matrix.target }}/release/ | grep -E "\.(clap|vst3|so|dll|dylib)" || echo "No plugin files found"
+          # Create CLAP bundle
+          mkdir -p CurveSampler.clap/Contents/MacOS
+          cp "$BINARY" CurveSampler.clap/Contents/MacOS/CurveSampler
+          cat > CurveSampler.clap/Contents/Info.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          zip -r artifacts/CurveSampler.clap-$PLATFORM-$VERSION.zip CurveSampler.clap
+
+          # Create VST3 bundle
+          mkdir -p CurveSampler.vst3/Contents/MacOS
+          cp "$BINARY" CurveSampler.vst3/Contents/MacOS/CurveSampler
+          cat > CurveSampler.vst3/Contents/Info.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CurveSampler</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.alexandernutz.curve-sampler.vst3</string>
+              <key>CFBundleName</key>
+              <string>Curve Sampler</string>
+              <key>CFBundlePackageType</key>
+              <string>BNDL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$VERSION</string>
+              <key>CFBundleVersion</key>
+              <string>$VERSION</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          zip -r artifacts/CurveSampler.vst3-$PLATFORM-$VERSION.zip CurveSampler.vst3
+
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

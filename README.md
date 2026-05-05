@@ -58,7 +58,7 @@ Alternatively, there is the option to set up to three frequencies manually.
 Note that the oscilloscope and spectrum analyzer also react to this for their display, so they act as a 
 preview for the frequency setting.
 
-Curve Jumbler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
+Curve Sampler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
 
 Hover over the frequency to get a tooltip explaining how it was computed.
 
@@ -69,7 +69,7 @@ Some examples:
 - **Serum / Other Synths:** Other synths, for instance Serum 2, don't pass through MIDI notes. 
   - *Bitwig Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it.
 - **Other DAWs:** Setup varies and will depend on how the DAW routes MIDI. 
-  - *Fallback*: A Fallback, if MIDI routing is a pain is always to play, to set Curve Sampler to the frequency of the note you're playing (default is A4/440Hz, so one can also just play that note when curve sampling).
+  - *Fallback*: If MIDI routing is a pain, just set Curve Sampler to the frequency of the note you're playing (default is A4/440Hz, so one can also just play that note when curve sampling).
 
 ## Curve Jumbler (Web App)
 
@@ -94,7 +94,7 @@ These things apply to both Curve Sampler and Curve Jumbler.
 
 ### Known Limitations and Philosophy
 
-For technical and funamental/mathematical reasons, parts of the Curve Sampler signal chain are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
+For technical and fundamental/mathematical reasons, parts of the Curve Sampler signal chain are quite approximative. Don't expect it to always match internal waveforms with surgical accuracy—I’ve tried to get close, but I think of Curve Sampler more as a **SVG Curve playground** than a laboratory tool.
 
 Part of the charm, in my opinion, of such a simple tool is that it doesn't have to match the quality standards of a "grown-up" plugin like Zebra 3. Keep things playful, rather than "production-grade". To me personally, one benefit is developing a better sonic intuition for waveforms, making it easier to create cool sounds down the line—whether by using tools or drawing them myself.
 
@@ -107,12 +107,11 @@ Furthermore **Window Resize** functionality is absent. Not for lack of trying on
 ### Technical Notes & Zebra 3 Interop
 
 - **Point Limits:** Zebra 3 can crash if you attempt to paste a curve with an excessive number of points. Curve Sampler includes point-reduction algorithms and a hard-cap of 100 points to ensure stability.
-- **Approximation:** Signal extraction from rendered audio is always approximative, but I tried to get 
-  close. (For those more versed than me, Gemini gives more details: Signal extraction from rendered audio is subject to the uncertainty principle; "perfect" recovery is theoretically impossible, but the use of Blackman-Harris windowing and 4-point Catmull-Rom resampling gets us very close.)
+- **Approximation:** Signal extraction from rendered audio is always approximative, but I tried to get close. (Technically: signal extraction from rendered audio is subject to the uncertainty principle; "perfect" recovery is theoretically impossible, but the use of Blackman-Harris windowing and 4-point Catmull-Rom resampling gets us very close.)
 
 ## Disclaimer & Safety
 
-- **Security:** While rare, it is possible to spread malware through plugin binaries. This project is fully open-source, release binaries are built through github's standard workflow, and my name is attached to it, which is the best "trust guarantee" I can offer. Always be cautious with unsigned binaries.
+- **Security:** While rare, it is possible to spread malware through plugin binaries. This project is fully open-source, release binaries are built through GitHub's standard workflow, and my name is attached to it, which is the best "trust guarantee" I can offer. Always be cautious with unsigned binaries.
 - **u-he Interop:** I don't want to cause extra work for the u-he team by "hacking" into an API (the clipboard format) that wasn't necessarily meant for this. If issues arise, I am happy to take this down or adjust it. If you're from u-he, feel free to reach out!
 
 ## Support & Bug Reports
@@ -131,9 +130,9 @@ Furthermore **Window Resize** functionality is absent. Not for lack of trying on
 I made this with the help of Claude Code and Gemini-CLI. 
 
 I do have several years of industry/research programming experience, but I am not a DSP specialist. 
-I wouldn't have been able to make this without. The cost of learning Rust, the various frameworks, and DSP algorithms would have exceeded my current time budget (though I'd love to learn more about all of this). 
+I wouldn't have been able to make this without it. The cost of learning Rust, the various frameworks, and DSP algorithms would have exceeded my current time budget (though I'd love to learn more about all of this). 
 
-Musing: This was a new experience, it's a bit like acting as the manager of a programmer with a lot of domain knowledge (who is also inhumanly fast, but also has odd quirks that humans don't have, usually), doing the usual iterations one would do when programming in a team. I think this process still can be done with more or less dilligence -- suffice to say, I'm not trying to build AI-code-slop here, but make something that makes sense and is useful and practical. 
+Musing: This was a new experience, it's a bit like acting as the manager of a programmer with a lot of domain knowledge (who is also inhumanly fast, but also has odd quirks that humans don't have, usually), doing the usual iterations one would do when programming in a team. I think this process still can be done with more or less diligence -- suffice to say, I'm not trying to build AI-code-slop here, but make something that makes sense and is useful and practical.
 AI hopefully just allows me to operate on this more abstract level, while still retaining all of my personal intentions. 
 I guess we'll all have to see where this goes and hopefully be responsible about it ...
 

@@ -39,7 +39,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxcb-icccm4-dev libxcb-dri2-0-dev
+          sudo apt-get install -y libgl1-mesa-dev libx11-dev libx11-xcb-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxcb-icccm4-dev libxcb-dri2-0-dev libxcb-util-dev
 
       - name: Build plugin (macOS universal)
         if: runner.os == 'macOS'

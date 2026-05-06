@@ -1,10 +1,13 @@
 # Notes & Design Observations
 
+## Future Improvements
+
+- **Window resize** — requires switching UI framework from egui/nih-plug-egui to Vizia (nih-plug supports both); egui doesn't support dynamic resize in plugin context
+- **Curve Jumbler polish** — hide the extra control point dots and tangent lines from the spline display; should show clean curves only
+
 ## Status / next review
 
-Intended workflow is in place. Letting it rest to get perspective on:
-- Is this something worth showing to people / useful to the Z3 community?
-- What's the right next priority: polish, features, or more algorithmic work on the basics?
+v0.2.0 released and announced in the u-he forum. Letting it rest to get perspective on community feedback.
 
 ## Open questions / pending thoughts
 

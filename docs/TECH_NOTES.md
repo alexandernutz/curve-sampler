@@ -39,7 +39,27 @@ We conducted a "Round Trip" fidelity test:
 ### Conclusion on Spectral Recovery:
 The "perfectly zero" bins in Zebra 3's editor are an additive ideal. Recovering them from rendered audio is subject to the **Uncertainty Principle of Signal Analysis**. Any sub-sample phase jitter or slight mismatch between the extracted cycle and the true oscillator period results in spectral smearing. The current implementation uses **Blackman-Harris 4-term windowing** to achieve the best possible sidelobe suppression (-92dB theoretical), which is the current state-of-the-art for this type of recovery.
 
-## 4. Geometry Optimization
+## 4. DAW Compatibility: macOS Bundle Requirements
+
+Bitwig and Studio One are lenient about plugin bundle structure. Ableton Live requires two additional things or it crashes silently during plugin scan:
+
+**`PkgInfo` file**
+A file at `Contents/PkgInfo` containing the literal bytes `BNDL????` (no newline). Without it, Ableton rejects the bundle.
+
+```bash
+echo -n "BNDL????" > Contents/PkgInfo
+```
+
+**Ad-hoc deep code signature**
+Ableton verifies that the bundle has a consistent code signature. Ad-hoc signing (no certificate) is sufficient:
+
+```bash
+codesign --force --sign - --deep <bundle>
+```
+
+Both steps are handled automatically in `deploy.sh` (local builds) and `.github/workflows/release.yml` (CI releases).
+
+## 5. Geometry Optimization
 
 ### Interpolation Fitting
 For the "Capture Geo" path, we switched to **64-segment Interpolation Fitting**. This ensures the Bézier curve passes **exactly** through its knot points, preserving sharp "jagged" edges (like Sawtooths) that are often smoothed out by traditional least-squares fitting.

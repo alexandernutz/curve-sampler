@@ -133,62 +133,14 @@ jobs:
           VERSION="${{ github.ref_name }}"
           BINARY="target/${{ matrix.target }}/release/libcurve_sampler.so"
 
-          # Create CLAP bundle
-          mkdir -p CurveSampler.clap/Contents/MacOS
-          cp "$BINARY" CurveSampler.clap/Contents/MacOS/CurveSampler
-          cat > CurveSampler.clap/Contents/Info.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>CurveSampler</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.alexandernutz.curve-sampler</string>
-              <key>CFBundleManufacturer</key>
-              <string>lx</string>
-              <key>CFBundleName</key>
-              <string>Curve Sampler</string>
-              <key>CFBundlePackageType</key>
-              <string>BNDL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>$VERSION</string>
-              <key>CFBundleVersion</key>
-              <string>$VERSION</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
+          # Create CLAP bundle (Linux: flat renamed .so, no macOS-style bundle)
+          mkdir -p CurveSampler.clap
+          cp "$BINARY" CurveSampler.clap/CurveSampler.clap
           zip -r artifacts/CurveSampler.clap-linux-$VERSION.zip CurveSampler.clap
 
-          # Create VST3 bundle
-          mkdir -p CurveSampler.vst3/Contents/MacOS
-          cp "$BINARY" CurveSampler.vst3/Contents/MacOS/CurveSampler
-          cat > CurveSampler.vst3/Contents/Info.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>CurveSampler</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.alexandernutz.curve-sampler.vst3</string>
-              <key>CFBundleManufacturer</key>
-              <string>lx</string>
-              <key>CFBundleName</key>
-              <string>Curve Sampler</string>
-              <key>CFBundlePackageType</key>
-              <string>BNDL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>$VERSION</string>
-              <key>CFBundleVersion</key>
-              <string>$VERSION</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
+          # Create VST3 bundle (Linux: Contents/x86_64-linux/)
+          mkdir -p CurveSampler.vst3/Contents/x86_64-linux
+          cp "$BINARY" CurveSampler.vst3/Contents/x86_64-linux/CurveSampler.so
           zip -r artifacts/CurveSampler.vst3-linux-$VERSION.zip CurveSampler.vst3
 
       - name: Create bundles (Windows)
@@ -199,62 +151,14 @@ jobs:
           $VERSION = "${{ github.ref_name }}"
           $BINARY = "target\${{ matrix.target }}\release\curve_sampler.dll"
 
-          # Create CLAP bundle
-          New-Item -ItemType Directory -Path "CurveSampler.clap\Contents\MacOS" -Force | Out-Null
-          Copy-Item "$BINARY" "CurveSampler.clap\Contents\MacOS\CurveSampler"
-          @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>CurveSampler</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.alexandernutz.curve-sampler</string>
-              <key>CFBundleManufacturer</key>
-              <string>lx</string>
-              <key>CFBundleName</key>
-              <string>Curve Sampler</string>
-              <key>CFBundlePackageType</key>
-              <string>BNDL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>$VERSION</string>
-              <key>CFBundleVersion</key>
-              <string>$VERSION</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          "@ | Set-Content "CurveSampler.clap\Contents\Info.plist"
+          # Create CLAP bundle (Windows: flat renamed DLL, no macOS-style bundle)
+          New-Item -ItemType Directory -Path "CurveSampler.clap" -Force | Out-Null
+          Copy-Item "$BINARY" "CurveSampler.clap\CurveSampler.clap"
           Compress-Archive -Path "CurveSampler.clap" -DestinationPath "artifacts\CurveSampler.clap-windows-$VERSION.zip"
 
-          # Create VST3 bundle
-          New-Item -ItemType Directory -Path "CurveSampler.vst3\Contents\MacOS" -Force | Out-Null
-          Copy-Item "$BINARY" "CurveSampler.vst3\Contents\MacOS\CurveSampler"
-          @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>CurveSampler</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.alexandernutz.curve-sampler.vst3</string>
-              <key>CFBundleManufacturer</key>
-              <string>lx</string>
-              <key>CFBundleName</key>
-              <string>Curve Sampler</string>
-              <key>CFBundlePackageType</key>
-              <string>BNDL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>$VERSION</string>
-              <key>CFBundleVersion</key>
-              <string>$VERSION</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-          </dict>
-          </plist>
-          "@ | Set-Content "CurveSampler.vst3\Contents\Info.plist"
+          # Create VST3 bundle (Windows: Contents/x86_64-win/, binary named .vst3)
+          New-Item -ItemType Directory -Path "CurveSampler.vst3\Contents\x86_64-win" -Force | Out-Null
+          Copy-Item "$BINARY" "CurveSampler.vst3\Contents\x86_64-win\CurveSampler.vst3"
           Compress-Archive -Path "CurveSampler.vst3" -DestinationPath "artifacts\CurveSampler.vst3-windows-$VERSION.zip"
 
 

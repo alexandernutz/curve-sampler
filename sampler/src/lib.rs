@@ -3,8 +3,6 @@ use nih_plug_egui::{create_egui_editor, egui, EguiState};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering, AtomicU32, AtomicUsize};
-use std::fs::OpenOptions;
-use std::io::Write;
 use curve_core::bezier::{fit_bezier, fit_bezier_adaptive};
 use curve_core::zebra_format;
 
@@ -14,19 +12,22 @@ pub use theme::ThemeMode;
 
 const BUFFER_SIZE: usize = 32768;
 
+#[cfg(feature = "debug-log")]
 fn log_to_file(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/curve_extractor.log")
-        {
+        let path = std::env::temp_dir().join("curve_sampler.log");
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
             if let Ok(elapsed) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
                 let _ = writeln!(file, "[{}] {}", elapsed.as_millis(), msg);
             }
         }
     }));
 }
+
+#[cfg(not(feature = "debug-log"))]
+fn log_to_file(_msg: &str) {}
 
 #[derive(Enum, PartialEq, Clone, Copy, Debug)]
 pub enum CurveDomain {
@@ -634,7 +635,7 @@ impl Plugin for CurveSampler {
                     });
                     });
                 });
-                egui_ctx.request_repaint();
+                egui_ctx.request_repaint_after(std::time::Duration::from_millis(16)); // ~60fps cap
             },
         )
     }

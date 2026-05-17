@@ -35,8 +35,24 @@ Curve Sampler lets users capture single cycle waveforms in Zebra 3's curve forma
 
 ### Installation
 
-Copy the CLAP or VST3 file/folder from the releases section here in Github into your plugin folder.
-(You might need to restart your DAW or start a refresh or so to get it to see the new plugin.)
+Download the CLAP or VST3 for your platform from the releases section and place it in your plugin folder. The standard default locations are:
+
+- **macOS VST3:** `~/Library/Audio/Plug-Ins/VST3/`
+- **macOS CLAP:** `~/Library/Audio/Plug-Ins/CLAP/`
+- **Windows VST3:** `C:\Program Files\Common Files\VST3\` (system-wide) or `%LOCALAPPDATA%\Programs\Common\VST3\` (current user)
+- **Windows CLAP:** `C:\Program Files\Common Files\CLAP\` (system-wide) or `%LOCALAPPDATA%\Programs\Common\CLAP\` (current user)
+- **Linux VST3:** `~/.vst3/` (user) or `/usr/lib/vst3/` (system-wide)
+- **Linux CLAP:** `~/.clap/` (user) or `/usr/lib/clap/` (system-wide)
+
+Most DAWs let you configure additional scan paths if you prefer a custom location.
+
+Then restart your DAW or trigger a plugin rescan.
+
+**macOS security warning:** Downloaded plugin binaries are quarantined by macOS. If you get a "cannot be opened" or malware warning, go to System Settings → Privacy & Security and click "Open Anyway", or run:
+```bash
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/CurveSampler.vst3
+```
+(Adjust the path if you used a custom location. See also the Security note below.)
 
 ### Usage
 

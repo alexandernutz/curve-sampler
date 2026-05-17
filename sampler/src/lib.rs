@@ -141,7 +141,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Sampler";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.2.1";
+    const VERSION: &'static str = "0.2.4";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
@@ -414,6 +414,16 @@ impl Plugin for CurveSampler {
                         ui.heading("Curve Sampler");
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(format!("v{}", Self::VERSION));
+                            #[cfg(feature = "fps-display")]
+                            {
+                                let fps = 1.0 / egui_ctx.input(|i| i.stable_dt);
+                                let muted = if ui.visuals().dark_mode { theme::dark::MUTED } else { theme::light::MUTED };
+                                #[cfg(not(feature = "no-repaint-throttle"))]
+                                let label = format!("{:.0} fps [throttled]", fps);
+                                #[cfg(feature = "no-repaint-throttle")]
+                                let label = format!("{:.0} fps [free]", fps);
+                                ui.label(egui::RichText::new(label).color(muted).small());
+                            }
                         });
                     });
                     ui.add_space(12.0);
@@ -635,7 +645,11 @@ impl Plugin for CurveSampler {
                     });
                     });
                 });
-                egui_ctx.request_repaint_after(std::time::Duration::from_millis(16)); // ~60fps cap
+                // ~60fps cap; omit feature to spin unthrottled
+                #[cfg(not(feature = "no-repaint-throttle"))]
+                egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                #[cfg(feature = "no-repaint-throttle")]
+                egui_ctx.request_repaint();
             },
         )
     }

@@ -1,6 +1,6 @@
 [package]
 name = "curve-sampler"
-version = "0.2.1"
+version = "0.2.4"
 edition = "2021"
 
 [lib]
@@ -8,6 +8,8 @@ crate-type = ["cdylib"]
 
 [features]
 debug-log = []
+fps-display = []
+no-repaint-throttle = []
 
 [dependencies]
 curve-core = { path = "../core" }

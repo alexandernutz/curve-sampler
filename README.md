@@ -146,4 +146,4 @@ I guess we'll all have to see where this goes and hopefully be responsible about
 
 ---
 
-**Version:** 0.2.0
+**Version:** 0.2.1

@@ -140,7 +140,7 @@ impl Plugin for CurveSampler {
     const VENDOR: &'static str = "Curve Sampler";
     const URL: &'static str = "https://github.com/alexandernutz/svg-osc_gem";
     const EMAIL: &'static str = "info@example.com";
-    const VERSION: &'static str = "0.2.0";
+    const VERSION: &'static str = "0.2.1";
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {

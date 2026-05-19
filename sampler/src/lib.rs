@@ -406,6 +406,8 @@ impl Plugin for CurveSampler {
 
                 log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
+                // Tooltips create floating windows that crash plugin hosts on Windows
+                egui_ctx.style_mut(|s| s.interaction.tooltip_delay = f32::MAX);
 
                 log_to_file("frame: theme done, starting egui draw");
                 egui::CentralPanel::default().show(egui_ctx, |ui| {

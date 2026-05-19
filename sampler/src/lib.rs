@@ -163,7 +163,7 @@ impl Plugin for CurveSampler {
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         log_to_file("GUI Opened - Waking up");
-        self.gui_is_open.store(true, Ordering::Relaxed);
+        self.gui_is_open.store(false, Ordering::Relaxed); // bisect: keep audio buf inactive
 
         let editor_state = EguiState::from_size(700, 500);
 

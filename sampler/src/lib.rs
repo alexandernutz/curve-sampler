@@ -660,6 +660,7 @@ impl Plugin for CurveSampler {
                 egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
                 #[cfg(feature = "no-repaint-throttle")]
                 egui_ctx.request_repaint();
+                log_to_file("frame: repaint scheduled, closure returning");
             },
         )
     }
@@ -670,6 +671,7 @@ impl Plugin for CurveSampler {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        log_to_file("process() called");
         let sample_rate = context.transport().sample_rate;
         self.sample_rate.store(sample_rate.to_bits(), Ordering::Relaxed);
         

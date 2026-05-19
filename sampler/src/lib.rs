@@ -521,7 +521,10 @@ impl Plugin for CurveSampler {
 
 
                     ui.add_space(14.0);
-
+                    ui.label("bisect: header+tracking only");
+                    // bisect return — skip painter calls
+                    return;
+                    #[allow(unreachable_code)]
                     ui.columns(2, |columns| {
                         columns[0].vertical(|ui| {
                             ui.label("Oscilloscope");

@@ -197,7 +197,6 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
-                // bisect marker — moved below DSP
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -406,15 +405,6 @@ impl Plugin for CurveSampler {
                 }
 
                 log_to_file("frame: dsp done");
-                // bisect: DSP runs, drawing is minimal
-                egui::CentralPanel::default().show(egui_ctx, |ui| { ui.label("bisect+dsp"); });
-                #[cfg(not(feature = "no-repaint-throttle"))]
-                egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
-                #[cfg(feature = "no-repaint-throttle")]
-                egui_ctx.request_repaint();
-                log_to_file("frame: repaint scheduled, closure returning");
-                #[allow(unused_variables, unreachable_code)]
-                let _bisect_skip = true; return;
                 theme::apply(egui_ctx, params.theme.value());
 
                 log_to_file("frame: theme done, starting egui draw");

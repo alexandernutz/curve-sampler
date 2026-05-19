@@ -431,7 +431,9 @@ impl Plugin for CurveSampler {
                         });
                     });
                     ui.add_space(12.0);
-                    
+                    // bisect: heading only
+                    return;
+                    #[allow(unreachable_code)]
                     // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {

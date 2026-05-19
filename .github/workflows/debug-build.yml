@@ -1,0 +1,35 @@
+name: Debug Build (Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build debug binary
+        run: cargo build --release -p curve-sampler --features debug-log
+        shell: bash
+
+      - name: Create VST3 bundle
+        shell: pwsh
+        run: |
+          $BINARY = "target\x86_64-pc-windows-msvc\release\curve_sampler.dll"
+          New-Item -ItemType Directory -Path "CurveSampler.vst3\Contents\x86_64-win" -Force | Out-Null
+          Copy-Item "$BINARY" "CurveSampler.vst3\Contents\x86_64-win\CurveSampler.vst3"
+          Compress-Archive -Path "CurveSampler.vst3" -DestinationPath "CurveSampler-debug-log.vst3.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CurveSampler-debug-log-windows
+          path: CurveSampler-debug-log.vst3.zip
+          retention-days: 7

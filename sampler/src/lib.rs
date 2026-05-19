@@ -434,21 +434,7 @@ impl Plugin for CurveSampler {
                     });
                     ui.add_space(12.0);
 
-                    // --- Tracking Panel (bisect: labels only, no interactive widgets) ---
-                    let current_mode = params.tracking_mode.value();
-                    let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label("Tracking:");
-                                ui.label(format!("{:?}", current_mode));
-                            });
-                            ui.label(format!("Active Target: {:.2} Hz  ({})", display_freq, target_reason));
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            ui.label(format!("Theme: {:?}", params.theme.value()));
-                        });
-                    });
+                    // bisect: heading only — hover over version label specifically
 
 
                     // bisect return — skip painter columns

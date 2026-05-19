@@ -197,6 +197,14 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
+                // bisect: empty render closure — no egui drawing
+                #[cfg(not(feature = "no-repaint-throttle"))]
+                egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                #[cfg(feature = "no-repaint-throttle")]
+                egui_ctx.request_repaint();
+                log_to_file("frame: repaint scheduled, closure returning");
+                #[allow(unused_variables, unreachable_code)]
+                let _bisect_skip = true; return;
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {

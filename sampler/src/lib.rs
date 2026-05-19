@@ -157,7 +157,7 @@ impl Plugin for CurveSampler {
     ];
 
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
-    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+    const SAMPLE_ACCURATE_AUTOMATION: bool = false;
 
     type SysExMessage = ();
     type BackgroundTask = ();

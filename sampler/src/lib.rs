@@ -431,9 +431,7 @@ impl Plugin for CurveSampler {
                         });
                     });
                     ui.add_space(12.0);
-                    // bisect: heading only
-                    return;
-                    #[allow(unreachable_code)]
+
                     // --- Tracking Panel ---
                     let mut current_mode = params.tracking_mode.value();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
@@ -522,7 +520,7 @@ impl Plugin for CurveSampler {
                     });
 
 
-                    // bisect return — skip tracking panel
+                    // bisect return — skip painter columns
                     return;
                     #[allow(unreachable_code)]
                     ui.add_space(14.0);

@@ -197,6 +197,9 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
+                // bisect: skip DSP entirely
+                #[allow(unused_variables, unreachable_code)]
+                let _dsp_skip = true; return;
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {

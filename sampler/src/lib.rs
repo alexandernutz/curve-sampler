@@ -671,10 +671,17 @@ impl Plugin for CurveSampler {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        log_to_file("process() called");
+        #[cfg(feature = "debug-log")]
+        {
+            use std::sync::atomic::{AtomicU64, Ordering as AO};
+            static PCALL: AtomicU64 = AtomicU64::new(0);
+            let n = PCALL.fetch_add(1, AO::Relaxed);
+            log_to_file(&format!("process() #{}", n));
+        }
         let sample_rate = context.transport().sample_rate;
         self.sample_rate.store(sample_rate.to_bits(), Ordering::Relaxed);
-        
+        log_to_file("process: after sample_rate");
+
         while let Some(event) = context.next_event() {
             match event {
                 NoteEvent::NoteOn { note, .. } => {
@@ -691,10 +698,11 @@ impl Plugin for CurveSampler {
                 _ => (),
             }
         }
-        
+        log_to_file("process: after midi");
+
         let mut trigger = self.trigger_capture.load(Ordering::SeqCst);
         let mut w_idx = self.write_idx.load(Ordering::Relaxed);
-        
+
         // --- Sleep Mode Logic ---
         // We only buffer samples if the GUI is open OR a capture was triggered.
         if self.gui_is_open.load(Ordering::Relaxed) || trigger {
@@ -714,7 +722,9 @@ impl Plugin for CurveSampler {
             }
         }
         
+        log_to_file("process: after audio buf loop");
         self.write_idx.store(w_idx, Ordering::Relaxed);
+        log_to_file("process: returning Normal");
         ProcessStatus::Normal
     }
 }

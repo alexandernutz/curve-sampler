@@ -192,8 +192,8 @@ impl Plugin for CurveSampler {
             move |egui_ctx, setter, _gui_handle| {
                 // Egui calls request_repaint() immediately on hover, which can spin the render
                 // loop much faster than 60fps on Windows and stall the host message loop.
-                // Gate the expensive work to at most ~60fps using wall-clock time.
-                {
+                // Gate DSP to at most ~60fps; always draw the UI to avoid blank-frame flicker.
+                let run_dsp = {
                     use std::sync::atomic::{AtomicU64, Ordering as AO};
                     static LAST_MS: AtomicU64 = AtomicU64::new(0);
                     let now = std::time::SystemTime::now()
@@ -201,12 +201,13 @@ impl Plugin for CurveSampler {
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or(0);
                     let last = LAST_MS.load(AO::Relaxed);
-                    if now.saturating_sub(last) < 14 {
-                        egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
-                        return;
+                    if now.saturating_sub(last) >= 14 {
+                        LAST_MS.store(now, AO::Relaxed);
+                        true
+                    } else {
+                        false
                     }
-                    LAST_MS.store(now, AO::Relaxed);
-                }
+                };
                 #[cfg(feature = "debug-log")]
                 {
                     use std::sync::atomic::{AtomicU64, Ordering as AO};
@@ -214,6 +215,16 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
+                // Drawing variables — defaults used on skipped-DSP frames
+                let mut preview_cycle: Vec<f32> = Vec::new();
+                let mut current_mags: Vec<f32> = Vec::new();
+                let mut period: f32 = *ema_period_mutex.lock();
+                let mut center = 0.0f32;
+                let mut range = 1.0f32;
+                let mut target_reason = "Manual / Single note".to_string();
+
+                if run_dsp {
+
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -242,12 +253,6 @@ impl Plugin for CurveSampler {
                         }
                     }
                 }
-
-                let mut preview_cycle = Vec::new();
-                let mut current_mags = Vec::new();
-                let mut period;
-                let mut center = 0.0;
-                let mut range = 1.0;
                 
                 let mut snapshot = vec![0.0f32; 8192];
                 let mut buffer_locked = false;
@@ -261,7 +266,6 @@ impl Plugin for CurveSampler {
                 let sample_rate = f32::from_bits(sample_rate_atomic.load(Ordering::Relaxed));
                 
                 let mut base_freq = 440.0;
-                let mut target_reason = "Manual / Single note".to_string();
                 if buffer_locked {
                     let mut active_freqs = Vec::new();
                     if params.tracking_mode.value() == TrackingMode::Auto {
@@ -421,10 +425,16 @@ impl Plugin for CurveSampler {
                     }
                 }
 
+                } // end run_dsp
                 log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
-                // Tooltips create floating windows that crash plugin hosts on Windows
-                egui_ctx.style_mut(|s| s.interaction.tooltip_delay = f32::MAX);
+                egui_ctx.style_mut(|s| {
+                    // Tooltips create floating windows that crash plugin hosts on Windows
+                    s.interaction.tooltip_delay = f32::MAX;
+                    // Hovering over text makes egui output CursorIcon::Text (IBeam),
+                    // which baseview sends to Windows and crashes in a plugin host context
+                    s.interaction.selectable_labels = false;
+                });
 
                 log_to_file("frame: theme done, starting egui draw");
                 egui::CentralPanel::default().show(egui_ctx, |ui| {

@@ -195,6 +195,13 @@ impl Plugin for CurveSampler {
             (),
             |_ctx, _user_state| {},
             move |egui_ctx, setter, _gui_handle| {
+                #[cfg(feature = "debug-log")]
+                {
+                    use std::sync::atomic::{AtomicU64, Ordering as AO};
+                    static FRAME: AtomicU64 = AtomicU64::new(0);
+                    let f = FRAME.fetch_add(1, AO::Relaxed);
+                    log_to_file(&format!("frame {} start", f));
+                }
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -402,8 +409,10 @@ impl Plugin for CurveSampler {
                     }
                 }
 
+                log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
 
+                log_to_file("frame: theme done, starting egui draw");
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("main_scroll")
@@ -645,6 +654,7 @@ impl Plugin for CurveSampler {
                     });
                     });
                 });
+                log_to_file("frame: egui draw done");
                 // ~60fps cap; omit feature to spin unthrottled
                 #[cfg(not(feature = "no-repaint-throttle"))]
                 egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));

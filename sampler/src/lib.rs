@@ -197,7 +197,10 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
-                // bisect: empty render closure — no egui drawing
+                // bisect: minimal egui panel only
+                egui::CentralPanel::default().show(egui_ctx, |ui| {
+                    ui.label("bisect");
+                });
                 #[cfg(not(feature = "no-repaint-throttle"))]
                 egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
                 #[cfg(feature = "no-repaint-throttle")]

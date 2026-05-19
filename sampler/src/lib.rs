@@ -190,6 +190,23 @@ impl Plugin for CurveSampler {
             (),
             |_ctx, _user_state| {},
             move |egui_ctx, setter, _gui_handle| {
+                // Egui calls request_repaint() immediately on hover, which can spin the render
+                // loop much faster than 60fps on Windows and stall the host message loop.
+                // Gate the expensive work to at most ~60fps using wall-clock time.
+                {
+                    use std::sync::atomic::{AtomicU64, Ordering as AO};
+                    static LAST_MS: AtomicU64 = AtomicU64::new(0);
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0);
+                    let last = LAST_MS.load(AO::Relaxed);
+                    if now.saturating_sub(last) < 14 {
+                        egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                        return;
+                    }
+                    LAST_MS.store(now, AO::Relaxed);
+                }
                 #[cfg(feature = "debug-log")]
                 {
                     use std::sync::atomic::{AtomicU64, Ordering as AO};
@@ -197,9 +214,6 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
-                // bisect: skip DSP entirely
-                #[allow(unused_variables, unreachable_code)]
-                let _dsp_skip = true; return;
                 if capture_ready.load(Ordering::SeqCst) {
                     if let (Some(mut raw_data), Some(domain)) = (raw_cycle.try_lock(), current_capture_domain.try_lock()) {
                         if !raw_data.is_empty() {
@@ -437,12 +451,77 @@ impl Plugin for CurveSampler {
                     });
                     ui.add_space(12.0);
 
-                    // bisect: heading only — hover over version label specifically
+                    // --- Tracking Panel ---
+                    let mut current_mode = params.tracking_mode.value();
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Tracking:");
+                                if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)").clicked() {
+                                    setter.begin_set_parameter(&params.tracking_mode);
+                                    setter.set_parameter(&params.tracking_mode, current_mode);
+                                    setter.end_set_parameter(&params.tracking_mode);
+                                }
+                                if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual").clicked() {
+                                    setter.begin_set_parameter(&params.tracking_mode);
+                                    setter.set_parameter(&params.tracking_mode, current_mode);
+                                    setter.end_set_parameter(&params.tracking_mode);
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                if current_mode == TrackingMode::Auto {
+                                    ui.label("Chord:");
+                                    let mut pri = params.chord_priority.value();
+                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
+                                        setter.begin_set_parameter(&params.chord_priority);
+                                        setter.set_parameter(&params.chord_priority, pri);
+                                        setter.end_set_parameter(&params.chord_priority);
+                                    }
+                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
+                                        setter.begin_set_parameter(&params.chord_priority);
+                                        setter.set_parameter(&params.chord_priority, pri);
+                                        setter.end_set_parameter(&params.chord_priority);
+                                    }
+                                } else {
+                                    ui.label("Freqs:");
+                                    for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
+                                        let mut val = p.value();
+                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
+                                            setter.begin_set_parameter(*p);
+                                            setter.set_parameter(*p, val);
+                                            setter.end_set_parameter(*p);
+                                        }
+                                    }
+                                }
+                            });
+                            let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
+                            ui.label(format!("Active Target: {:.2} Hz  ({})", display_freq, target_reason));
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            ui.horizontal(|ui| {
+                                let mut current_theme = params.theme.value();
+                                let label = match current_theme {
+                                    ThemeMode::Auto => "Auto",
+                                    ThemeMode::Light => "Light",
+                                    ThemeMode::Dark => "Dark",
+                                };
+                                egui::ComboBox::from_id_salt("theme_combo")
+                                    .selected_text(label)
+                                    .width(55.0)
+                                    .show_ui(ui, |ui| {
+                                        if ui.selectable_value(&mut current_theme, ThemeMode::Auto, "Auto").clicked()
+                                        || ui.selectable_value(&mut current_theme, ThemeMode::Light, "Light").clicked()
+                                        || ui.selectable_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
+                                            setter.begin_set_parameter(&params.theme);
+                                            setter.set_parameter(&params.theme, current_theme);
+                                            setter.end_set_parameter(&params.theme);
+                                        }
+                                    });
+                                ui.label("Theme:");
+                            });
+                        });
+                    });
 
-
-                    // bisect return — skip painter columns
-                    return;
-                    #[allow(unreachable_code)]
                     ui.add_space(14.0);
                     ui.columns(2, |columns| {
                         columns[0].vertical(|ui| {

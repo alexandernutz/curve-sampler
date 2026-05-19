@@ -22,7 +22,7 @@ jobs:
       - name: Create VST3 bundle
         shell: pwsh
         run: |
-          $BINARY = "target\x86_64-pc-windows-msvc\release\curve_sampler.dll"
+          $BINARY = "target\release\curve_sampler.dll"
           New-Item -ItemType Directory -Path "CurveSampler.vst3\Contents\x86_64-win" -Force | Out-Null
           Copy-Item "$BINARY" "CurveSampler.vst3\Contents\x86_64-win\CurveSampler.vst3"
           Compress-Archive -Path "CurveSampler.vst3" -DestinationPath "CurveSampler-debug-log.vst3.zip"

@@ -434,86 +434,19 @@ impl Plugin for CurveSampler {
                     });
                     ui.add_space(12.0);
 
-                    // --- Tracking Panel ---
-                    let mut current_mode = params.tracking_mode.value();
+                    // --- Tracking Panel (bisect: labels only, no interactive widgets) ---
+                    let current_mode = params.tracking_mode.value();
+                    let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Tracking:");
-                                if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)")
-                                    .clicked()
-                                {
-                                    setter.begin_set_parameter(&params.tracking_mode);
-                                    setter.set_parameter(&params.tracking_mode, current_mode);
-                                    setter.end_set_parameter(&params.tracking_mode);
-                                }
-
-                                if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual")
-                                    .clicked()
-                                {
-                                    setter.begin_set_parameter(&params.tracking_mode);
-                                    setter.set_parameter(&params.tracking_mode, current_mode);
-                                    setter.end_set_parameter(&params.tracking_mode);
-                                }
+                                ui.label(format!("{:?}", current_mode));
                             });
-
-                            ui.horizontal(|ui| {
-                                if current_mode == TrackingMode::Auto {
-                                    ui.label("Chord:");
-                                    let mut pri = params.chord_priority.value();
-                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest")
-                                        .clicked()
-                                    {
-                                        setter.begin_set_parameter(&params.chord_priority);
-                                        setter.set_parameter(&params.chord_priority, pri);
-                                        setter.end_set_parameter(&params.chord_priority);
-                                    }
-                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common")
-                                        .clicked()
-                                    {
-                                        setter.begin_set_parameter(&params.chord_priority);
-                                        setter.set_parameter(&params.chord_priority, pri);
-                                        setter.end_set_parameter(&params.chord_priority);
-                                    }
-                                } else {
-                                    ui.label("Freqs:");
-                                    for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
-                                        let mut val = p.value();
-                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
-                                            setter.begin_set_parameter(*p);
-                                            setter.set_parameter(*p, val);
-                                            setter.end_set_parameter(*p);
-                                        }
-                                    }
-                                }
-                            });
-
-                            let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
                             ui.label(format!("Active Target: {:.2} Hz  ({})", display_freq, target_reason));
                         });
-
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            ui.horizontal(|ui| {
-                                let mut current_theme = params.theme.value();
-                                let label = match current_theme {
-                                    ThemeMode::Auto => "Auto",
-                                    ThemeMode::Light => "Light",
-                                    ThemeMode::Dark => "Dark",
-                                };
-                                egui::ComboBox::from_id_salt("theme_combo")
-                                    .selected_text(label)
-                                    .width(55.0)
-                                    .show_ui(ui, |ui| {
-                                        if ui.selectable_value(&mut current_theme, ThemeMode::Auto, "Auto").clicked()
-                                        || ui.selectable_value(&mut current_theme, ThemeMode::Light, "Light").clicked()
-                                        || ui.selectable_value(&mut current_theme, ThemeMode::Dark, "Dark").clicked() {
-                                            setter.begin_set_parameter(&params.theme);
-                                            setter.set_parameter(&params.theme, current_theme);
-                                            setter.end_set_parameter(&params.theme);
-                                        }
-                                    });
-                                ui.label("Theme:");
-                            });
+                            ui.label(format!("Theme: {:?}", params.theme.value()));
                         });
                     });
 

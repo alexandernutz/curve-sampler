@@ -189,6 +189,9 @@ impl Plugin for CurveSampler {
         let ema_mags_mutex = self.ema_magnitudes.clone();
         let fft_planner_mutex = self.fft_planner.clone();
         let gui_is_open_clone = self.gui_is_open.clone();
+        // Cache of pre-evaluated stored curve y-values; avoids re-parsing the SVG text
+        // and re-evaluating 512 Bezier points on every repaint frame.
+        let stored_preview: Arc<Mutex<(usize, Vec<f32>)>> = Arc::new(Mutex::new((usize::MAX, Vec::new())));
 
         create_egui_editor(
             editor_state,
@@ -430,6 +433,18 @@ impl Plugin for CurveSampler {
                     }
                 }
 
+                // Refresh stored curve preview cache when captured text changes
+                if let Some(text) = captured.try_lock() {
+                    if let Some(mut cache) = stored_preview.try_lock() {
+                        if text.len() != cache.0 {
+                            cache.0 = text.len();
+                            cache.1 = curve_core::zebra_format::parse(&text)
+                                .map(|c| (0..=512).map(|i| c.eval(i as f32 / 512.0)).collect())
+                                .unwrap_or_default();
+                        }
+                    }
+                }
+
                 } // end run_dsp
                 log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
@@ -504,7 +519,15 @@ impl Plugin for CurveSampler {
                                     ui.label("Freqs:");
                                     for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
                                         let mut val = p.value();
-                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
+                                        let response = ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0));
+                                        // DragValue text-edit mode sets platform_output.ime which
+                                        // triggers Win32 IME/caret APIs that crash in plugin hosts.
+                                        #[cfg(target_os = "windows")]
+                                        if response.has_focus() {
+                                            response.surrender_focus();
+                                            egui_ctx.output_mut(|o| o.ime = None);
+                                        }
+                                        if response.changed() {
                                             setter.begin_set_parameter(*p);
                                             setter.set_parameter(*p, val);
                                             setter.end_set_parameter(*p);
@@ -651,13 +674,11 @@ impl Plugin for CurveSampler {
                         let bg = if columns[1].visuals().dark_mode { theme::dark::BG_PANEL } else { theme::light::BG_PANEL };
                         let faint = if columns[1].visuals().dark_mode { theme::dark::FAINT } else { theme::light::FAINT };
                         painter.rect_filled(rect, 2.0, bg);
-                        if let Some(text) = captured.try_lock() {
-                            if let Ok(curve) = curve_core::zebra_format::parse(&text) {
-                                let preview_steps = 512;
-                                let pts: Vec<egui::Pos2> = (0..=preview_steps).map(|i| {
-                                    let t = i as f32 / preview_steps as f32;
-                                    let y = curve.eval(t);
-                                    let px = rect.left() + t * rect.width();
+                        if let Some(cache) = stored_preview.try_lock() {
+                            if !cache.1.is_empty() {
+                                let n = cache.1.len() - 1;
+                                let pts: Vec<egui::Pos2> = cache.1.iter().enumerate().map(|(i, &y)| {
+                                    let px = rect.left() + (i as f32 / n as f32) * rect.width();
                                     let py = rect.bottom() - y * rect.height();
                                     egui::pos2(px, py)
                                 }).collect();

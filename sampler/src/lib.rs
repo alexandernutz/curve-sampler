@@ -29,6 +29,15 @@ fn log_to_file(msg: &str) {
 #[cfg(not(feature = "debug-log"))]
 fn log_to_file(_msg: &str) {}
 
+fn hz_to_note_name(hz: f32) -> String {
+    if hz <= 0.0 { return "---".to_string(); }
+    const NAMES: &[&str] = &["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+    let midi = (69.0 + 12.0 * (hz / 440.0).log2()).round() as i32;
+    let octave = midi / 12 - 1;
+    let name = NAMES[((midi % 12 + 12) % 12) as usize];
+    format!("{}{}", name, octave)
+}
+
 #[derive(Enum, PartialEq, Clone, Copy, Debug)]
 pub enum CurveDomain {
     Geometry,
@@ -536,11 +545,18 @@ impl Plugin for CurveSampler {
                                         (&params.manual_freq3, 0.0f32),
                                     ] {
                                         let val = p.value();
-                                        let resp = ui.label(format!("{:.0} Hz ⇅", val));
+                                        let note = hz_to_note_name(val);
+                                        let label = if val <= 0.0 {
+                                            "--- ⇅".to_string()
+                                        } else {
+                                            format!("{:.0} Hz ({}) ⇅", val, note)
+                                        };
+                                        let resp = ui.label(label);
                                         if ui.rect_contains_pointer(resp.rect) {
                                             let delta = ui.input(|i| i.smooth_scroll_delta.y);
                                             if delta != 0.0 {
-                                                let new_val = (val * (1.0 + delta * 0.005)).clamp(min_val, 20000.0);
+                                                // additive+proportional so val=0 can start moving
+                                                let new_val = (val + delta * (val * 0.005 + 0.5)).clamp(min_val, 20000.0);
                                                 setter.begin_set_parameter(p);
                                                 setter.set_parameter(p, new_val);
                                                 setter.end_set_parameter(p);

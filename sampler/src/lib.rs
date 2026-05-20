@@ -552,16 +552,21 @@ impl Plugin for CurveSampler {
                                     ] {
                                         let val = p.value();
                                         let label = if val <= 0.0 {
-                                            "--- ⇅".to_string()
+                                            "---".to_string()
                                         } else {
                                             let (note, cents) = hz_to_note_name(val);
-                                            let tune = if cents.abs() <= 3 { "=" } else if cents > 0 { "↑" } else { "↓" };
-                                            let freq_str = if val >= 1000.0 {
-                                                format!("{:.1} kHz", val / 1000.0)
+                                            // Show numeric cents so user can judge precision; blank when on pitch
+                                            let tune = if cents.abs() <= 3 {
+                                                String::new()
                                             } else {
-                                                format!("{:.0} Hz", val)
+                                                format!("{:+}c", cents)
                                             };
-                                            format!("{} ({}{}) ⇅", freq_str, note, tune)
+                                            let freq_str = if val >= 1000.0 {
+                                                format!("{:.1}kHz", val / 1000.0)
+                                            } else {
+                                                format!("{:.0}Hz", val)
+                                            };
+                                            format!("{} {}{}", freq_str, note, tune)
                                         };
                                         // Fixed width prevents layout shifts as digits change
                                         let resp = ui.add_sized(
@@ -571,8 +576,9 @@ impl Plugin for CurveSampler {
                                         if ui.rect_contains_pointer(resp.rect) {
                                             let delta = ui.input(|i| i.smooth_scroll_delta.y);
                                             if delta != 0.0 {
-                                                // additive+proportional so val=0 can start moving
-                                                let new_val = (val + delta * (val * 0.005 + 0.5)).clamp(min_val, 20000.0);
+                                                // proportional + small floor; floor kept small (0.1) for
+                                                // sub-100Hz precision — adjacent semitones are ~1-2Hz there
+                                                let new_val = (val + delta * (val * 0.003 + 0.1)).clamp(min_val, 20000.0);
                                                 setter.begin_set_parameter(p);
                                                 setter.set_parameter(p, new_val);
                                                 setter.end_set_parameter(p);

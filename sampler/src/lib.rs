@@ -434,11 +434,14 @@ impl Plugin for CurveSampler {
                 log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
                 egui_ctx.style_mut(|s| {
-                    // Tooltips create floating windows that crash plugin hosts on Windows
-                    s.interaction.tooltip_delay = f32::MAX;
-                    // Hovering over text makes egui output CursorIcon::Text (IBeam),
-                    // which baseview sends to Windows and crashes in a plugin host context
-                    s.interaction.selectable_labels = false;
+                    #[cfg(target_os = "windows")]
+                    {
+                        // Tooltips create floating windows that crash plugin hosts on Windows
+                        s.interaction.tooltip_delay = f32::MAX;
+                        // Hovering over text makes egui output CursorIcon::Text (IBeam),
+                        // which baseview sends to Windows and crashes in a plugin host context
+                        s.interaction.selectable_labels = false;
+                    }
                 });
 
                 log_to_file("frame: theme done, starting egui draw");
@@ -669,6 +672,7 @@ impl Plugin for CurveSampler {
                 log_to_file("frame: egui draw done");
                 // Baseview passes any cursor-icon change to Windows APIs that crash in a plugin
                 // host context. Force default every frame so no widget change reaches baseview.
+                #[cfg(target_os = "windows")]
                 egui_ctx.set_cursor_icon(egui::CursorIcon::Default);
                 // ~60fps cap; omit feature to spin unthrottled
                 #[cfg(not(feature = "no-repaint-throttle"))]

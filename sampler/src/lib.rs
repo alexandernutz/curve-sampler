@@ -517,20 +517,34 @@ impl Plugin for CurveSampler {
                                     }
                                 } else {
                                     ui.label("Freqs:");
+                                    #[cfg(not(target_os = "windows"))]
                                     for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
                                         let mut val = p.value();
-                                        let response = ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0));
-                                        // DragValue text-edit mode sets platform_output.ime which
-                                        // triggers Win32 IME/caret APIs that crash in plugin hosts.
-                                        #[cfg(target_os = "windows")]
-                                        if response.has_focus() {
-                                            response.surrender_focus();
-                                            egui_ctx.output_mut(|o| o.ime = None);
-                                        }
-                                        if response.changed() {
+                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
                                             setter.begin_set_parameter(*p);
                                             setter.set_parameter(*p, val);
                                             setter.end_set_parameter(*p);
+                                        }
+                                    }
+                                    // DragValue uses Sense::click_and_drag which causes continuous
+                                    // repaints on hover, stalling the host message loop on Windows.
+                                    // Use a plain label + scroll wheel instead (no interaction sense).
+                                    #[cfg(target_os = "windows")]
+                                    for (p, min_val) in [
+                                        (&params.manual_freq1, 20.0f32),
+                                        (&params.manual_freq2, 0.0f32),
+                                        (&params.manual_freq3, 0.0f32),
+                                    ] {
+                                        let val = p.value();
+                                        let resp = ui.label(format!("{:.0} Hz ⇅", val));
+                                        if ui.rect_contains_pointer(resp.rect) {
+                                            let delta = ui.input(|i| i.smooth_scroll_delta.y);
+                                            if delta != 0.0 {
+                                                let new_val = (val * (1.0 + delta * 0.005)).clamp(min_val, 20000.0);
+                                                setter.begin_set_parameter(p);
+                                                setter.set_parameter(p, new_val);
+                                                setter.end_set_parameter(p);
+                                            }
                                         }
                                     }
                                 }

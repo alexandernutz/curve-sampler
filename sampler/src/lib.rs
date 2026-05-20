@@ -41,6 +41,26 @@ fn hz_to_note_name(hz: f32) -> (String, i32) {
     (format!("{}{}", name, octave), cents)
 }
 
+// Parses a Hz number or a note name (e.g. "C4", "A#3", "Bb5") into a frequency.
+// Used as a DragValue custom_parser on non-Windows so users can type note names.
+#[cfg(not(target_os = "windows"))]
+fn parse_note_input(s: &str) -> Option<f64> {
+    if let Ok(v) = s.trim().parse::<f64>() { return Some(v); }
+    let mut chars = s.trim().chars().peekable();
+    let semitone = match chars.next()?.to_ascii_uppercase() {
+        'C' => 0i32, 'D' => 2, 'E' => 4, 'F' => 5,
+        'G' => 7,    'A' => 9, 'B' => 11, _ => return None,
+    };
+    let accidental = match chars.peek() {
+        Some('#') => { chars.next(); 1 },
+        Some('b') => { chars.next(); -1 },
+        _ => 0,
+    };
+    let octave: i32 = chars.collect::<String>().trim().parse().ok()?;
+    let midi = (octave + 1) * 12 + semitone + accidental;
+    Some(440.0 * 2.0f64.powf((midi - 69) as f64 / 12.0))
+}
+
 #[derive(Enum, PartialEq, Clone, Copy, Debug)]
 pub enum CurveDomain {
     Geometry,
@@ -534,10 +554,15 @@ impl Plugin for CurveSampler {
                                     ui.label("Freqs:");
                                     #[cfg(not(target_os = "windows"))]
                                     for p in &[&params.manual_freq1, &params.manual_freq2, &params.manual_freq3] {
-                                        let mut val = p.value();
-                                        if ui.add(egui::DragValue::new(&mut val).suffix(" Hz").speed(1.0)).changed() {
+                                        let mut val = p.value() as f64;
+                                        let drag = egui::DragValue::new(&mut val)
+                                            .suffix(" Hz")
+                                            .speed(0.5)         // half-Hz per drag pixel
+                                            .max_decimals(2)
+                                            .custom_parser(parse_note_input); // also accepts "C4", "A#3" etc.
+                                        if ui.add(drag).changed() {
                                             setter.begin_set_parameter(*p);
-                                            setter.set_parameter(*p, val);
+                                            setter.set_parameter(*p, val as f32);
                                             setter.end_set_parameter(*p);
                                         }
                                     }
@@ -588,7 +613,9 @@ impl Plugin for CurveSampler {
                                 }
                             });
                             let display_freq = f32::from_bits(target_freq_atomic.load(Ordering::Relaxed));
-                            ui.label(format!("Active Target: {:.2} Hz  ({})", display_freq, target_reason));
+                            let (tgt_note, tgt_cents) = hz_to_note_name(display_freq);
+                            let tgt_cents_str = if tgt_cents.abs() <= 3 { String::new() } else { format!(" {:+}c", tgt_cents) };
+                            ui.label(format!("Active: {:.1} Hz  {}{}  ({})", display_freq, tgt_note, tgt_cents_str, target_reason));
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                             ui.horizontal(|ui| {

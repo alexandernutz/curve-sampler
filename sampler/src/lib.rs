@@ -29,13 +29,16 @@ fn log_to_file(msg: &str) {
 #[cfg(not(feature = "debug-log"))]
 fn log_to_file(_msg: &str) {}
 
-fn hz_to_note_name(hz: f32) -> String {
-    if hz <= 0.0 { return "---".to_string(); }
+// Returns (note_name, cents_deviation) where cents is in [-50, 50].
+fn hz_to_note_name(hz: f32) -> (String, i32) {
+    if hz <= 0.0 { return ("---".to_string(), 0); }
     const NAMES: &[&str] = &["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-    let midi = (69.0 + 12.0 * (hz / 440.0).log2()).round() as i32;
+    let midi_exact = 69.0 + 12.0 * (hz / 440.0).log2();
+    let midi = midi_exact.round() as i32;
+    let cents = ((midi_exact - midi as f32) * 100.0).round() as i32;
     let octave = midi / 12 - 1;
     let name = NAMES[((midi % 12 + 12) % 12) as usize];
-    format!("{}{}", name, octave)
+    (format!("{}{}", name, octave), cents)
 }
 
 #[derive(Enum, PartialEq, Clone, Copy, Debug)]
@@ -303,7 +306,10 @@ impl Plugin for CurveSampler {
                     if !active_freqs.is_empty() {
                         base_freq = active_freqs[0];
                         if active_freqs.len() >= 2 {
-                            if params.chord_priority.value() == ChordPriority::LowestNote {
+                            // Manual mode always uses common-period logic; chord_priority only applies in Auto.
+                            if params.chord_priority.value() == ChordPriority::LowestNote
+                                && params.tracking_mode.value() == TrackingMode::Auto
+                            {
                                 target_reason = format!("Lowest note of {} active freqs", active_freqs.len());
                             } else {
                                 let f1 = active_freqs[0];
@@ -545,13 +551,23 @@ impl Plugin for CurveSampler {
                                         (&params.manual_freq3, 0.0f32),
                                     ] {
                                         let val = p.value();
-                                        let note = hz_to_note_name(val);
                                         let label = if val <= 0.0 {
                                             "--- ⇅".to_string()
                                         } else {
-                                            format!("{:.0} Hz ({}) ⇅", val, note)
+                                            let (note, cents) = hz_to_note_name(val);
+                                            let tune = if cents.abs() <= 3 { "=" } else if cents > 0 { "↑" } else { "↓" };
+                                            let freq_str = if val >= 1000.0 {
+                                                format!("{:.1} kHz", val / 1000.0)
+                                            } else {
+                                                format!("{:.0} Hz", val)
+                                            };
+                                            format!("{} ({}{}) ⇅", freq_str, note, tune)
                                         };
-                                        let resp = ui.label(label);
+                                        // Fixed width prevents layout shifts as digits change
+                                        let resp = ui.add_sized(
+                                            egui::vec2(140.0, ui.spacing().interact_size.y),
+                                            egui::Label::new(label),
+                                        );
                                         if ui.rect_contains_pointer(resp.rect) {
                                             let delta = ui.input(|i| i.smooth_scroll_delta.y);
                                             if delta != 0.0 {

@@ -617,6 +617,7 @@ impl Plugin for CurveSampler {
                                         egui::TextEdit::multiline(&mut *text)
                                             .font(egui::TextStyle::Monospace)
                                             .desired_width(f32::INFINITY)
+                                            .interactive(false)
                                     );
                                 });
                             columns[0].add_space(10.0);

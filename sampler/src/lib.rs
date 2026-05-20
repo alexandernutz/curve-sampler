@@ -258,9 +258,8 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
-                // Drawing variables — on skipped-DSP frames, scope falls back to cache
-                let mut preview_cycle: Vec<f32> = scope_cache.try_lock()
-                    .map(|c| c.clone()).unwrap_or_default();
+                // Drawing variables — defaults used on skipped-DSP frames
+                let mut preview_cycle: Vec<f32> = Vec::new();
                 let mut current_mags: Vec<f32> = Vec::new();
                 let mut period: f32 = *ema_period_mutex.lock();
                 let mut center = 0.0f32;
@@ -484,11 +483,14 @@ impl Plugin for CurveSampler {
                     }
                 }
 
+                } // end run_dsp
+
+                // After DSP block: update cache if we got fresh data, else use cached waveform
                 if !preview_cycle.is_empty() {
                     if let Some(mut c) = scope_cache.try_lock() { *c = preview_cycle.clone(); }
+                } else if let Some(c) = scope_cache.try_lock() {
+                    preview_cycle = c.clone();
                 }
-
-                } // end run_dsp
                 log_to_file("frame: dsp done");
                 theme::apply(egui_ctx, params.theme.value());
                 egui_ctx.style_mut(|s| {

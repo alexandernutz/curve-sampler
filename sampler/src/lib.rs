@@ -36,7 +36,7 @@ fn hz_to_note_name(hz: f32) -> (String, i32) {
     let midi_exact = 69.0 + 12.0 * (hz / 440.0).log2();
     let midi = midi_exact.round() as i32;
     let cents = ((midi_exact - midi as f32) * 100.0).round() as i32;
-    let octave = midi / 12 - 1;
+    let octave = midi / 12 - 2; // Yamaha convention: Middle C = C3, matching most DAWs incl. Bitwig
     let name = NAMES[((midi % 12 + 12) % 12) as usize];
     (format!("{}{}", name, octave), cents)
 }
@@ -57,7 +57,7 @@ fn parse_note_input(s: &str) -> Option<f64> {
         _ => 0,
     };
     let octave: i32 = chars.collect::<String>().trim().parse().ok()?;
-    let midi = (octave + 1) * 12 + semitone + accidental;
+    let midi = (octave + 2) * 12 + semitone + accidental; // Yamaha convention: C3 = MIDI 60
     Some(440.0 * 2.0f64.powf((midi - 69) as f64 / 12.0))
 }
 

@@ -74,9 +74,9 @@ Alternatively, there is the option to set up to three frequencies manually.
 Note that the oscilloscope and spectrum analyzer also react to this for their display, so they act as a 
 preview for the frequency setting.
 
-Curve Sampler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note.
+Curve Sampler deals with **Chords** by trying to find a common cycle length. If it can't find a common cycle length (the common period can be impractically long), it will revert to using the lowest given note. This applies to both Auto (MIDI) and Manual modes.
 
-Hover over the frequency to get a tooltip explaining how it was computed.
+The **Active** frequency display shows the current target frequency, its nearest note name, and how it was computed (e.g. "MIDI input", "Common period", "Manual frequency"). Hover over the tracking mode buttons for more detail.
 
 Note that MIDI routing workflow depends on the specific DAW and device chain.
 
@@ -85,7 +85,7 @@ Some examples:
 - **Serum / Other Synths:** Other synths, for instance Serum 2, don't pass through MIDI notes. 
   - *Bitwig Workaround:* In Bitwig, wrap the synth in an Instrument Layer and put Curve Sampler after it.
 - **Other DAWs:** Setup varies and will depend on how the DAW routes MIDI. 
-  - *Fallback*: If MIDI routing is a pain, just set Curve Sampler to the frequency of the note you're playing (default is A4/440Hz, so one can also just play that note when curve sampling).
+  - *Fallback*: If MIDI routing is a pain, just set Curve Sampler to the frequency of the note you're playing (default is A3/440Hz, so one can also just play that note when curve sampling). You can type a note name directly into the frequency field (e.g. "C3", "F#2").
 
 ## Curve Jumbler (Web App)
 
@@ -118,7 +118,7 @@ While the outputs sometimes are a bit "noisy," Zebra 3's inbuilt tools (Simplify
 
 Note that curves with many points can be heavy on Zebra 3's performance, especially if they are being morphed, simplifying them can help a lot there.
 
-Furthermore **Window Resize** functionality is absent. Not for lack of trying on my side. Maybe I'll have a go at it in the near future. Feel free to reach out if you need it. 
+Furthermore **Window Resize** functionality is absent. This is a framework limitation of the current egui/nih-plug setup — it is a known issue and on the roadmap, but requires a non-trivial migration. Feel free to reach out if it's a blocker for you.
 
 ### Technical Notes & Zebra 3 Interop
 

@@ -667,6 +667,9 @@ impl Plugin for CurveSampler {
                     });
                 });
                 log_to_file("frame: egui draw done");
+                // Baseview passes any cursor-icon change to Windows APIs that crash in a plugin
+                // host context. Force default every frame so no widget change reaches baseview.
+                egui_ctx.set_cursor_icon(egui::CursorIcon::Default);
                 // ~60fps cap; omit feature to spin unthrottled
                 #[cfg(not(feature = "no-repaint-throttle"))]
                 egui_ctx.request_repaint_after(std::time::Duration::from_millis(16));

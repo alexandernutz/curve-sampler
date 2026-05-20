@@ -145,6 +145,11 @@ impl Plugin for CurveSampler {
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
         AudioIOLayout {
+            main_input_channels: std::num::NonZeroU32::new(1),
+            main_output_channels: std::num::NonZeroU32::new(1),
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
             main_input_channels: std::num::NonZeroU32::new(2),
             main_output_channels: std::num::NonZeroU32::new(2),
             ..AudioIOLayout::const_default()
@@ -163,7 +168,7 @@ impl Plugin for CurveSampler {
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         log_to_file("GUI Opened - Waking up");
-        self.gui_is_open.store(false, Ordering::Relaxed); // bisect: keep audio buf inactive
+        self.gui_is_open.store(true, Ordering::Relaxed);
 
         let editor_state = EguiState::from_size(700, 500);
 

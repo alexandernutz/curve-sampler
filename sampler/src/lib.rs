@@ -224,6 +224,9 @@ impl Plugin for CurveSampler {
         // Cache of pre-evaluated stored curve y-values; avoids re-parsing the SVG text
         // and re-evaluating 512 Bezier points on every repaint frame.
         let stored_preview: Arc<Mutex<(usize, Vec<f32>)>> = Arc::new(Mutex::new((usize::MAX, Vec::new())));
+        // Last computed oscilloscope waveform; reused on frames where run_dsp is false
+        // to prevent flicker (empty preview_cycle → blank oscilloscope → visible flash).
+        let scope_cache: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
 
         create_egui_editor(
             editor_state,
@@ -255,8 +258,9 @@ impl Plugin for CurveSampler {
                     let f = FRAME.fetch_add(1, AO::Relaxed);
                     log_to_file(&format!("frame {} start", f));
                 }
-                // Drawing variables — defaults used on skipped-DSP frames
-                let mut preview_cycle: Vec<f32> = Vec::new();
+                // Drawing variables — on skipped-DSP frames, scope falls back to cache
+                let mut preview_cycle: Vec<f32> = scope_cache.try_lock()
+                    .map(|c| c.clone()).unwrap_or_default();
                 let mut current_mags: Vec<f32> = Vec::new();
                 let mut period: f32 = *ema_period_mutex.lock();
                 let mut center = 0.0f32;
@@ -478,6 +482,10 @@ impl Plugin for CurveSampler {
                                 .unwrap_or_default();
                         }
                     }
+                }
+
+                if !preview_cycle.is_empty() {
+                    if let Some(mut c) = scope_cache.try_lock() { *c = preview_cycle.clone(); }
                 }
 
                 } // end run_dsp

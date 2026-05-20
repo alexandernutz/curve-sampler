@@ -535,12 +535,16 @@ impl Plugin for CurveSampler {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Tracking:");
-                                if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)").clicked() {
+                                if ui.radio_value(&mut current_mode, TrackingMode::Auto, "Auto (MIDI)")
+                                    .on_hover_text("Sets capture length based on incoming MIDI notes.")
+                                    .clicked() {
                                     setter.begin_set_parameter(&params.tracking_mode);
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
                                 }
-                                if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual").clicked() {
+                                if ui.radio_value(&mut current_mode, TrackingMode::Manual, "Manual")
+                                    .on_hover_text("Sets capture length based on the manual frequency boxes below. 0 Hz means 'ignore'.")
+                                    .clicked() {
                                     setter.begin_set_parameter(&params.tracking_mode);
                                     setter.set_parameter(&params.tracking_mode, current_mode);
                                     setter.end_set_parameter(&params.tracking_mode);
@@ -550,12 +554,16 @@ impl Plugin for CurveSampler {
                                 if current_mode == TrackingMode::Auto {
                                     ui.label("Chord:");
                                     let mut pri = params.chord_priority.value();
-                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest").clicked() {
+                                    if ui.radio_value(&mut pri, ChordPriority::LowestNote, "Lowest")
+                                        .on_hover_text("Captures based on the lowest incoming MIDI note.")
+                                        .clicked() {
                                         setter.begin_set_parameter(&params.chord_priority);
                                         setter.set_parameter(&params.chord_priority, pri);
                                         setter.end_set_parameter(&params.chord_priority);
                                     }
-                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common").clicked() {
+                                    if ui.radio_value(&mut pri, ChordPriority::CommonPeriod, "Common")
+                                        .on_hover_text("Captures the full chord cycle by finding a shared period (LCM). The resulting curve will have a lower root pitch than the individual notes.")
+                                        .clicked() {
                                         setter.begin_set_parameter(&params.chord_priority);
                                         setter.set_parameter(&params.chord_priority, pri);
                                         setter.end_set_parameter(&params.chord_priority);

@@ -2,12 +2,15 @@
 
 ## Future Improvements
 
-- **Window resize** — requires switching UI framework from egui/nih-plug-egui to Vizia (nih-plug supports both); egui doesn't support dynamic resize in plugin context
+- **Window resize** — egui doesn't support dynamic resize in plugin context. Two options considered:
+  - **Vizia** (nih-plug's alternative UI backend): supports resize, but is a completely different widget toolkit requiring a full UI rewrite. Not practical.
+  - **nice-plug** ([codeberg.org/BillyDM/nice-plug](https://codeberg.org/BillyDM/nice-plug)): a maintained fork of nih-plug that uses egui 0.34, has a `ResizableWindow` widget, and includes cursor/crash fixes already applied to egui-baseview. API is mostly compatible but has some breaking changes. Good migration target once the project is more stable — would also resolve the Windows hover-crash workarounds at the framework level. *Not switching now: mid-release, macOS testing gap, fresh rename.*
+- **Windows frequency text input** — DragValue is banned on Windows (hover crash). Current workaround is scroll-wheel labels. nice-plug migration would likely fix the underlying issue and restore text input.
 - **Curve Jumbler polish** — hide the extra control point dots and tangent lines from the spline display; should show clean curves only
 
 ## Status / next review
 
-v0.2.0 released and announced in the u-he forum. Letting it rest to get perspective on community feedback.
+v0.2.7 released (2026-05-20). Windows crash fixes, MIDI fix, note name display. Letting it rest for Windows community feedback.
 
 ## Open questions / pending thoughts
 
